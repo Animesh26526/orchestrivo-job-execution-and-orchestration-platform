@@ -5,9 +5,9 @@
 <body>
 <h2>Experiment Run: ${experiment.id}</h2>
 <a href="<%= request.getContextPath() %>/experiments">Back</a>
-<p>Algorithm: ${experiment.algorithmName}</p>
-<p>Status: ${experiment.runStatus}</p>
-<p>Validation: ${experiment.validationStatus}</p>
+<p>Algorithm: <c:out value="${experiment.algorithmName}"/></p>
+<p>Status: <c:out value="${experiment.runStatus}"/></p>
+<p>Validation: <c:out value="${experiment.validationStatus}"/></p>
 <c:if test="${not empty experiment.errorMessage}">
     <p style="color:red;"><c:out value="${experiment.errorMessage}"/></p>
 </c:if>

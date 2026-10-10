@@ -82,5 +82,9 @@ public class ExperimentRunRepositoryJdbcImplTest {
         assertNotNull(loadedResult.getAggregateMetrics());
         assertEquals(1, loadedResult.getExecutionTimeline().size());
         assertEquals(1, loadedResult.getProcessMetrics().size());
+        
+        repository.deleteById(saved.getId());
+        workloadRepository.deleteById(wl.getId());
+        userRepository.deleteById(user.getId());
     }
 }

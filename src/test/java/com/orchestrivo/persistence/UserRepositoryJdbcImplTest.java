@@ -39,5 +39,7 @@ public class UserRepositoryJdbcImplTest {
         Optional<User> found = repository.findById(savedUser.getId());
         assertTrue(found.isPresent());
         assertEquals(user.getEmail(), found.get().getEmail());
+        
+        repository.deleteById(savedUser.getId());
     }
 }

@@ -13,6 +13,17 @@ public class AppConfigListener implements ServletContextListener {
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
+        // Configure Session tracking
+        jakarta.servlet.SessionCookieConfig sessionCookieConfig = sce.getServletContext().getSessionCookieConfig();
+        sessionCookieConfig.setHttpOnly(true);
+        sessionCookieConfig.setAttribute("SameSite", "Lax");
+        
+        // Use only cookies for session tracking (disable URL rewriting)
+        sce.getServletContext().setSessionTrackingModes(java.util.Set.of(jakarta.servlet.SessionTrackingMode.COOKIE));
+        sce.getServletContext().setSessionTimeout(30); // 30 minutes
+
+        // Note: For production, secure cookies should be enabled via deployment configuration or dynamically if req.isSecure().
+
         // Initialize DataSource (will read from env or local config)
         DataSourceManager.getDataSource();
         

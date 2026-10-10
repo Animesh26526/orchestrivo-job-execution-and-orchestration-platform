@@ -1,8 +1,12 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <html>
 <head><title>New Workload</title></head>
 <body>
 <h2>New Workload</h2>
+<c:if test="${not empty error}">
+    <p style="color:red;"><c:out value="${error}"/></p>
+</c:if>
 <form action="<%= request.getContextPath() %>/workloads/new" method="post">
     <input type="hidden" name="csrfToken" value="${sessionScope.csrfToken}"/>
     <label>Name: <input type="text" name="name" required></label><br/>

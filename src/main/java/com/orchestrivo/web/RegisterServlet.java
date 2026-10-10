@@ -22,6 +22,7 @@ public class RegisterServlet extends HttpServlet {
         try {
             User user = ServiceRegistry.authService.register(email, password, "USER");
             HttpSession session = req.getSession(true);
+            req.changeSessionId();
             session.setAttribute("user", user);
             session.setAttribute("csrfToken", UUID.randomUUID().toString());
             resp.sendRedirect(req.getContextPath() + "/dashboard");

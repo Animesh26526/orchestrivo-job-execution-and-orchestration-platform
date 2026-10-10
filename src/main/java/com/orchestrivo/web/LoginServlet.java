@@ -22,6 +22,7 @@ public class LoginServlet extends HttpServlet {
         User user = ServiceRegistry.authService.authenticate(email, password);
         if (user != null) {
             HttpSession session = req.getSession(true);
+            req.changeSessionId();
             session.setAttribute("user", user);
             session.setAttribute("csrfToken", UUID.randomUUID().toString());
             resp.sendRedirect(req.getContextPath() + "/dashboard");

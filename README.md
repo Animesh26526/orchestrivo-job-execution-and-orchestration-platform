@@ -65,6 +65,7 @@ The resulting `orchestrivo.war` file will be generated in the `target/` director
 - **Simulation Only**: The project simulates scheduling. It does not execute actual OS processes.
 - **Single-Node**: This application is not yet distributed or cluster-aware.
 - **Frontend**: The UI uses simple HTML/CSS and vanilla JS. It does not utilize an advanced framework like React or Vue.
+- **Audit Logging**: While the database schema defines an `audit_logs` table, application-level audit logging is not implemented in the current scope. This is an explicit limitation.
 
 ## Testing
 

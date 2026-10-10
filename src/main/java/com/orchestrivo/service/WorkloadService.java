@@ -44,7 +44,7 @@ public class WorkloadService {
         if (opt.isPresent() && opt.get().getOwnerUserId() == userId) {
             workloadRepository.deleteById(workloadId);
         } else {
-            throw new SecurityException("Not authorized to delete this workload.");
+            throw new IllegalArgumentException("Workload not found.");
         }
     }
 }

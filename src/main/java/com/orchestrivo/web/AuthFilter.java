@@ -15,23 +15,28 @@ public class AuthFilter implements Filter {
         HttpServletResponse response = (HttpServletResponse) res;
         
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        
         boolean isPublic = path.equals("/") || path.equals("/login") || path.equals("/register") || path.startsWith("/assets/");
         
-        HttpSession session = request.getSession(false);
-        boolean isLoggedIn = (session != null && session.getAttribute("user") != null);
+        HttpSession session = request.getSession(true);
+        boolean isLoggedIn = (session.getAttribute("user") != null);
+        
+        // Ensure a CSRF token always exists for the session
+        if (session.getAttribute("csrfToken") == null) {
+            session.setAttribute("csrfToken", java.util.UUID.randomUUID().toString());
+        }
         
         if (!isPublic && !isLoggedIn) {
             response.sendRedirect(request.getContextPath() + "/login");
             return;
         }
 
-        // Basic CSRF check for state-changing requests
-        if (isLoggedIn && request.getMethod().equalsIgnoreCase("POST") && !isPublic) {
+        // Validate CSRF for any state-changing requests
+        String method = request.getMethod();
+        if (method.equalsIgnoreCase("POST") || method.equalsIgnoreCase("PUT") || method.equalsIgnoreCase("DELETE")) {
             String sessionCsrf = (String) session.getAttribute("csrfToken");
             String requestCsrf = request.getParameter("csrfToken");
             if (sessionCsrf == null || !sessionCsrf.equals(requestCsrf)) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid CSRF Token");
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or missing CSRF Token");
                 return;
             }
         }

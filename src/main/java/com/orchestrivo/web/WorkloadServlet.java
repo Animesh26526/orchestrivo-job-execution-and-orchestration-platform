@@ -21,13 +21,17 @@ public class WorkloadServlet extends HttpServlet {
         if ("/workloads/new".equals(path)) {
             req.getRequestDispatcher("/WEB-INF/views/workloads/new.jsp").forward(req, resp);
         } else if ("/workloads/view".equals(path)) {
-            long id = Long.parseLong(req.getParameter("id"));
-            Optional<WorkloadRecord> wr = ServiceRegistry.workloadService.getWorkloadById(id, user.getId());
-            if (wr.isPresent()) {
-                req.setAttribute("workload", wr.get());
-                req.getRequestDispatcher("/WEB-INF/views/workloads/view.jsp").forward(req, resp);
-            } else {
-                resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            try {
+                long id = Long.parseLong(req.getParameter("id"));
+                Optional<WorkloadRecord> wr = ServiceRegistry.workloadService.getWorkloadById(id, user.getId());
+                if (wr.isPresent()) {
+                    req.setAttribute("workload", wr.get());
+                    req.getRequestDispatcher("/WEB-INF/views/workloads/view.jsp").forward(req, resp);
+                } else {
+                    resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Workload not found");
+                }
+            } catch (NumberFormatException e) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid workload ID");
             }
         } else {
             req.setAttribute("workloads", ServiceRegistry.workloadService.getWorkloadsByUser(user.getId()));
@@ -61,9 +65,13 @@ public class WorkloadServlet extends HttpServlet {
                 req.getRequestDispatcher("/WEB-INF/views/workloads/new.jsp").forward(req, resp);
             }
         } else if ("/workloads/delete".equals(path)) {
-            long id = Long.parseLong(req.getParameter("id"));
-            ServiceRegistry.workloadService.deleteWorkload(id, user.getId());
-            resp.sendRedirect(req.getContextPath() + "/workloads");
+            try {
+                long id = Long.parseLong(req.getParameter("id"));
+                ServiceRegistry.workloadService.deleteWorkload(id, user.getId());
+                resp.sendRedirect(req.getContextPath() + "/workloads");
+            } catch (IllegalArgumentException e) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+            }
         }
     }
 }

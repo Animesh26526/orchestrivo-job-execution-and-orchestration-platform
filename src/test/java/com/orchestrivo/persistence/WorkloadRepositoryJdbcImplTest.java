@@ -58,5 +58,8 @@ public class WorkloadRepositoryJdbcImplTest {
         assertEquals("Test Workload", found.get().getName());
         assertNotNull(found.get().getWorkload());
         assertEquals(2, found.get().getWorkload().getProcesses().size());
+        
+        repository.deleteById(saved.getId());
+        userRepository.deleteById(user.getId());
     }
 }

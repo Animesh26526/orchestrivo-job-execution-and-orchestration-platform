@@ -17,13 +17,17 @@ public class ExperimentServlet extends HttpServlet {
         User user = (User) req.getSession().getAttribute("user");
 
         if ("/experiments/view".equals(path)) {
-            long id = Long.parseLong(req.getParameter("id"));
-            Optional<ExperimentRunRecord> run = ServiceRegistry.experimentService.getExperimentById(id, user.getId());
-            if (run.isPresent()) {
-                req.setAttribute("experiment", run.get());
-                req.getRequestDispatcher("/WEB-INF/views/experiments/view.jsp").forward(req, resp);
-            } else {
-                resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            try {
+                long id = Long.parseLong(req.getParameter("id"));
+                Optional<ExperimentRunRecord> run = ServiceRegistry.experimentService.getExperimentById(id, user.getId());
+                if (run.isPresent()) {
+                    req.setAttribute("experiment", run.get());
+                    req.getRequestDispatcher("/WEB-INF/views/experiments/view.jsp").forward(req, resp);
+                } else {
+                    resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Experiment not found");
+                }
+            } catch (NumberFormatException e) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid experiment ID");
             }
         } else {
             req.setAttribute("experiments", ServiceRegistry.experimentService.getExperimentsByUser(user.getId()));

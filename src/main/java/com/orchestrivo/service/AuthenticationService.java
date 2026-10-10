@@ -18,7 +18,7 @@ public class AuthenticationService {
         }
         Optional<User> existing = userRepository.findByEmail(email);
         if (existing.isPresent()) {
-            throw new IllegalArgumentException("User with this email already exists.");
+            throw new IllegalArgumentException("Registration failed. Invalid input or email already in use.");
         }
         String hash = BCrypt.withDefaults().hashToString(12, password.toCharArray());
         User user = new User();
