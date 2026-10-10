@@ -59,9 +59,8 @@ public class ExperimentServlet extends HttpServlet {
                 ExperimentRunRecord run = ServiceRegistry.experimentService.runExperiment(wr.get(), algorithmName, quantum, user.getId());
                 resp.sendRedirect(req.getContextPath() + "/experiments/view?id=" + run.getId());
             } catch (Exception e) {
-                req.setAttribute("error", e.getMessage());
-                // In a real app we'd redirect back to the workload with error, simplified here:
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+                getServletContext().log("Experiment execution failed for workloadId=" + req.getParameter("workloadId") + ": " + e.toString());
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Failed to start experiment due to invalid configuration or internal error.");
             }
         }
     }

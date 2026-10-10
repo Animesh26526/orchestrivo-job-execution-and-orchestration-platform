@@ -17,19 +17,19 @@ public class DataSourceManager {
             
             String url = System.getenv("JDBC_URL");
             if (url == null || url.trim().isEmpty()) {
-                url = "jdbc:mysql://localhost:3306/orchestrivo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                throw new IllegalStateException("JDBC_URL environment variable is required.");
             }
             config.setJdbcUrl(url);
 
             String user = System.getenv("JDBC_USER");
             if (user == null || user.trim().isEmpty()) {
-                user = "root";
+                throw new IllegalStateException("JDBC_USER environment variable is required. (Do not use root in production)");
             }
             config.setUsername(user);
 
             String password = System.getenv("JDBC_PASSWORD");
             if (password == null || password.trim().isEmpty()) {
-                password = "password";
+                throw new IllegalStateException("JDBC_PASSWORD environment variable is required.");
             }
             config.setPassword(password);
 
