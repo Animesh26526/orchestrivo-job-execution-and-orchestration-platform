@@ -77,7 +77,7 @@ public class MetricsCalculator {
         String lastProcessId = null;
         for (ExecutionSegment segment : timeline) {
             if (!segment.getProcessId().equals(lastProcessId)) {
-                if (lastProcessId != null && !ExecutionSegment.IDLE_PROCESS_ID.equals(lastProcessId)) {
+                if (lastProcessId != null && !ExecutionSegment.IDLE_PROCESS_ID.equalsIgnoreCase(lastProcessId)) {
                     contextSwitches++;
                 }
                 lastProcessId = segment.getProcessId();

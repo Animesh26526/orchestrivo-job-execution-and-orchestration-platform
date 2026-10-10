@@ -11,6 +11,9 @@ public class ProcessSpec {
         if (processId == null || processId.trim().isEmpty()) {
             throw new IllegalArgumentException("Process ID cannot be null or empty");
         }
+        if (ExecutionSegment.IDLE_PROCESS_ID.equalsIgnoreCase(processId)) {
+            throw new IllegalArgumentException("Process ID '" + processId + "' is reserved");
+        }
         if (arrivalTime < 0) {
             throw new IllegalArgumentException("Arrival time cannot be negative");
         }

@@ -94,6 +94,16 @@ public class ScheduleValidator {
             metricsMap.put(pm.getProcessId(), pm);
         }
 
+        // Verify duplicates and unexpected metrics
+        if (metrics.size() != workload.getProcesses().size()) {
+            errors.add("Process metrics count (" + metrics.size() + ") does not match workload size (" + workload.getProcesses().size() + ")");
+        }
+        for (ProcessMetrics pm : metrics) {
+            if (!processMap.containsKey(pm.getProcessId())) {
+                errors.add("Unexpected metrics for process: " + pm.getProcessId());
+            }
+        }
+
         for (ProcessSpec spec : workload.getProcesses()) {
             String pid = spec.getProcessId();
             ProcessMetrics pm = metricsMap.get(pid);
@@ -123,6 +133,80 @@ public class ScheduleValidator {
             int expectedRt = pm.getFirstStartTime() - spec.getArrivalTime();
             if (pm.getResponseTime() != expectedRt) {
                 errors.add("Response time incorrect for process " + pid + ". Expected " + expectedRt);
+            }
+        }
+
+        // Aggregate Metrics Verification
+        AggregateMetrics ag = result.getAggregateMetrics();
+        if (ag != null) {
+            double tol = 0.0001;
+            int n = workload.getProcesses().size();
+            double expectedAvgWt = 0;
+            double expectedAvgTat = 0;
+            double expectedAvgRt = 0;
+            
+            for (ProcessSpec spec : workload.getProcesses()) {
+                String pid = spec.getProcessId();
+                ProcessMetrics pm = metricsMap.get(pid);
+                if (pm != null) {
+                    expectedAvgWt += pm.getWaitingTime();
+                    expectedAvgTat += pm.getTurnaroundTime();
+                    expectedAvgRt += pm.getResponseTime();
+                }
+            }
+            if (n > 0) {
+                expectedAvgWt /= n;
+                expectedAvgTat /= n;
+                expectedAvgRt /= n;
+            }
+            
+            if (Math.abs(ag.getAverageWaitingTime() - expectedAvgWt) > tol) {
+                errors.add("Aggregate average waiting time incorrect. Expected " + expectedAvgWt);
+            }
+            if (Math.abs(ag.getAverageTurnaroundTime() - expectedAvgTat) > tol) {
+                errors.add("Aggregate average turnaround time incorrect. Expected " + expectedAvgTat);
+            }
+            if (Math.abs(ag.getAverageResponseTime() - expectedAvgRt) > tol) {
+                errors.add("Aggregate average response time incorrect. Expected " + expectedAvgRt);
+            }
+            
+            int expectedDuration = timeline.isEmpty() ? 0 : timeline.get(timeline.size() - 1).getEndTime();
+            if (ag.getTotalDuration() != expectedDuration) {
+                errors.add("Aggregate total duration incorrect. Expected " + expectedDuration);
+            }
+            
+            int expectedIdle = 0;
+            int expectedBusy = 0;
+            int contextSwitches = 0;
+            String lastProcessId = null;
+            
+            for (ExecutionSegment segment : timeline) {
+                if (segment.isIdle()) {
+                    expectedIdle += segment.getDuration();
+                } else {
+                    expectedBusy += segment.getDuration();
+                }
+                
+                if (!segment.getProcessId().equals(lastProcessId)) {
+                    if (lastProcessId != null && !ExecutionSegment.IDLE_PROCESS_ID.equalsIgnoreCase(lastProcessId)) {
+                        contextSwitches++;
+                    }
+                    lastProcessId = segment.getProcessId();
+                }
+            }
+            
+            if (ag.getCpuIdleTime() != expectedIdle) {
+                errors.add("Aggregate CPU idle time incorrect. Expected " + expectedIdle);
+            }
+            if (ag.getCpuBusyTime() != expectedBusy) {
+                errors.add("Aggregate CPU busy time incorrect. Expected " + expectedBusy);
+            }
+            if (ag.getContextSwitchCount() != contextSwitches) {
+                errors.add("Aggregate context switch count incorrect. Expected " + contextSwitches);
+            }
+            double expectedThroughput = expectedDuration == 0 ? 0 : (double) n / expectedDuration;
+            if (Math.abs(ag.getThroughput() - expectedThroughput) > tol) {
+                errors.add("Aggregate throughput incorrect. Expected " + expectedThroughput);
             }
         }
 

@@ -40,6 +40,6 @@ public class ExecutionSegment {
     }
     
     public boolean isIdle() {
-        return IDLE_PROCESS_ID.equals(processId);
+        return IDLE_PROCESS_ID.equalsIgnoreCase(processId);
     }
 }
