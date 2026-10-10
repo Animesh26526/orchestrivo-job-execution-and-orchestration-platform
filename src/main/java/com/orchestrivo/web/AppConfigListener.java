@@ -22,8 +22,10 @@ public class AppConfigListener implements ServletContextListener {
         sce.getServletContext().setSessionTrackingModes(java.util.Set.of(jakarta.servlet.SessionTrackingMode.COOKIE));
         sce.getServletContext().setSessionTimeout(30); // 30 minutes
 
-        // Note: For production, secure cookies should be enabled via deployment configuration or dynamically if req.isSecure().
-
+        // Enable secure cookies if running in production over HTTPS
+        if ("true".equalsIgnoreCase(System.getenv("PRODUCTION_HTTPS"))) {
+            sessionCookieConfig.setSecure(true);
+        }
         // Initialize DataSource (will read from env or local config)
         DataSourceManager.getDataSource();
         

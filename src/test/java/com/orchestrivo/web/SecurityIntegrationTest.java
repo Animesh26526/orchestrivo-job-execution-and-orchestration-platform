@@ -160,26 +160,121 @@ public class SecurityIntegrationTest {
     }
 
     @Test
+    void testOwnershipEnforcementForExperimentRetrieval() throws ServletException, IOException {
+        com.orchestrivo.service.ExperimentService experimentService = mock(com.orchestrivo.service.ExperimentService.class);
+        ServiceRegistry.experimentService = experimentService;
+        
+        ExperimentServlet servlet = new ExperimentServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        
+        when(request.getServletPath()).thenReturn("/experiments/view");
+        when(request.getParameter("id")).thenReturn("5");
+        
+        when(experimentService.getExperimentById(5L, 1L)).thenReturn(Optional.empty());
+
+        servlet.doGet(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_NOT_FOUND, "Experiment not found");
+    }
+
+    @Test
+    void testOwnershipEnforcementForExperimentMutation() throws ServletException, IOException {
+        WorkloadService workloadService = mock(WorkloadService.class);
+        ServiceRegistry.workloadService = workloadService;
+        
+        ExperimentServlet servlet = new ExperimentServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        
+        when(request.getServletPath()).thenReturn("/experiments/run");
+        when(request.getParameter("workloadId")).thenReturn("10");
+        when(request.getParameter("algorithmName")).thenReturn("FCFS");
+        
+        // Simulating the workload not belonging to the user
+        when(workloadService.getWorkloadById(10L, 1L)).thenReturn(Optional.empty());
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Workload not found or not owned");
+    }
+
+    @Test
+    void testOwnershipEnforcementForWorkloadMutation() throws ServletException, IOException {
+        WorkloadService workloadService = mock(WorkloadService.class);
+        ServiceRegistry.workloadService = workloadService;
+        
+        WorkloadServlet servlet = new WorkloadServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        
+        when(request.getServletPath()).thenReturn("/workloads/delete");
+        when(request.getParameter("id")).thenReturn("10");
+        
+        // Simulating the case where delete throws IllegalArgumentException because the workload is not owned
+        doThrow(new IllegalArgumentException("Workload not found or unauthorized")).when(workloadService).deleteWorkload(10L, 1L);
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Workload not found or unauthorized");
+    }
+
+    @Test
+    void testCsrfRejectionOnRegistration() throws ServletException, IOException {
+        AuthFilter filter = new AuthFilter();
+        
+        when(request.getRequestURI()).thenReturn("/register");
+        when(request.getContextPath()).thenReturn("");
+        when(request.getMethod()).thenReturn("POST");
+        when(session.getAttribute("user")).thenReturn(null);
+        when(session.getAttribute("csrfToken")).thenReturn("valid-token");
+        when(request.getParameter("csrfToken")).thenReturn("invalid-token");
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or missing CSRF Token");
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    void testSafeHandlingOfUnexpectedExceptions() throws ServletException, IOException {
+        AuthenticationService authService = mock(AuthenticationService.class);
+        ServiceRegistry.authService = authService;
+        
+        LoginServlet servlet = new LoginServlet();
+        
+        when(request.getParameter("email")).thenReturn("email");
+        when(request.getParameter("password")).thenReturn("password");
+        
+        // Mocking an unexpected runtime exception (e.g. Database down)
+        when(authService.authenticate("email", "password")).thenThrow(new RuntimeException("Database connection failed"));
+
+        assertThrows(RuntimeException.class, () -> servlet.doPost(request, response));
+        // The servlet container handles 500 mapping for uncaught RuntimeExceptions.
+        // We verify that the raw exception is not caught and swallowed as a 200 OK.
+    }
+
+    @Test
     void testHtmlEscapingInRenderedViews() throws IOException {
-        // Since we can't easily run a JSP engine in this test without complex setup,
-        // we can verify that the JSP files use <c:out> for user-controlled data.
         Path viewsPath = Paths.get("src/main/webapp/WEB-INF/views");
         assertTrue(Files.exists(viewsPath), "Views directory should exist");
 
-        // We check workload list and view jsp for c:out usage which escapes HTML by default.
-        try (Stream<Path> paths = Files.walk(viewsPath)) {
-            boolean hasCOut = paths
-                    .filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(".jsp"))
-                    .anyMatch(p -> {
-                        try {
-                            String content = Files.readString(p);
-                            return content.contains("<c:out");
-                        } catch (IOException e) {
-                            return false;
-                        }
-                    });
-            assertTrue(hasCOut, "Expected to find <c:out> tags in JSP files for HTML escaping");
+        // We check workload list and view jsp for c:out usage wrapping specific user-controlled fields.
+        Path listJsp = viewsPath.resolve("workloads/list.jsp");
+        Path viewJsp = viewsPath.resolve("workloads/view.jsp");
+
+        if (Files.exists(listJsp)) {
+            String listContent = Files.readString(listJsp);
+            assertTrue(listContent.contains("<c:out value=\"${w.name}\"/>"), "List JSP should escape workload name");
+        }
+        
+        if (Files.exists(viewJsp)) {
+            String viewContent = Files.readString(viewJsp);
+            assertTrue(viewContent.contains("<c:out value=\"${workload.name}\"/>"), "View JSP should escape workload name");
+            assertTrue(viewContent.contains("<c:out value=\"${workload.description}\"/>"), "View JSP should escape workload description");
         }
     }
 }
