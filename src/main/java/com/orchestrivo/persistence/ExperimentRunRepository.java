@@ -1,17 +1,13 @@
 package com.orchestrivo.persistence;
 
-import com.orchestrivo.domain.ScheduleResult;
+import com.orchestrivo.model.ExperimentRunRecord;
 import java.util.Optional;
 import java.util.List;
 
-/**
- * Stage 1 Boundary: ExperimentRunRepository
- * Defines the contract for persisting and retrieving ScheduleResults (experiment runs).
- * Implementation will be provided in Stage 2 (JDBC).
- */
 public interface ExperimentRunRepository {
-    void save(ScheduleResult result, long workloadId, long ownerUserId);
-    Optional<ScheduleResult> findById(long runId);
-    List<ScheduleResult> findByWorkloadId(long workloadId);
+    ExperimentRunRecord save(ExperimentRunRecord record);
+    Optional<ExperimentRunRecord> findById(long runId);
+    List<ExperimentRunRecord> findByWorkloadId(long workloadId);
+    List<ExperimentRunRecord> findByOwnerId(long ownerUserId);
     void deleteById(long runId);
 }

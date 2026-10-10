@@ -1,8 +1,0 @@
-com\orchestrivo\scheduling\strategies\FcfsStrategyTest.class
-com\orchestrivo\domain\ProcessSpecTest.class
-com\orchestrivo\scheduling\strategies\SrtfStrategyTest.class
-com\orchestrivo\scheduling\strategies\RoundRobinStrategyTest.class
-com\orchestrivo\validation\ScheduleValidatorTest.class
-com\orchestrivo\domain\ExecutionSegmentTest.class
-com\orchestrivo\scheduling\SchedulingIntegrationTest.class
-com\orchestrivo\scheduling\strategies\SjfStrategyTest.class

@@ -1,88 +1,76 @@
 # Orchestrivo
 
-Orchestrivo is a Java-based job execution and orchestration platform. It is designed to act as a simulator for operating-system CPU scheduling algorithms and will eventually evolve into a full web application for experiment management and benchmarking.
+Orchestrivo is a Java-based job execution and orchestration platform. In Stage 2, it has evolved from a simple scheduling simulator into a full Java web application (WAR) with persistent storage, web interfaces, authentication, and experiment management.
 
-## Stage 1 Capabilities
+## Stage 2 Capabilities
 
-Currently, Orchestrivo is in **Stage 1** of development. It provides the core domain models, four standard CPU scheduling algorithms, scheduling metrics calculation, and an independent schedule validation mechanism. 
+Orchestrivo has been transformed into a fully deployable web application running on Tomcat. The scheduling algorithms and domain logic from Stage 1 have been kept strictly separate from the web and persistence layers.
 
-The application is implemented as a layered modular monolith, ensuring separation of concerns between algorithms, metrics, validation, and data representation.
+### Key Features
+1. **Jakarta EE Web Interface**: Server-side rendered UI using Jakarta Servlets and JSP pages.
+2. **Authentication & Authorization**: Secure user registration and login utilizing bcrypt password hashing and session-based authentication via filters.
+3. **JDBC Persistence**: Custom JDBC repositories using HikariCP for connection pooling. Supports complete lifecycles for workloads, execution metrics, and audit history.
+4. **Workload Management**: Users can create, view, and manage process workloads directly from the web interface.
+5. **Experiment Running**: Users can trigger simulations of the four scheduling algorithms (FCFS, SJF, SRTF, Round Robin) against workloads and view validation outcomes and metrics.
+6. **Graceful Database Handling**: If the database is missing, integration tests are automatically skipped (`Assumptions.assumeTrue`) to ensure uninterrupted build pipelines.
 
-### Supported Scheduling Algorithms
-
-1. **FCFS (First Come, First Served)**: Non-preemptive scheduling where processes are executed in the exact order they arrive.
-2. **SJF (Shortest Job First)**: Non-preemptive scheduling where the process with the shortest burst time is selected next.
-3. **SRTF (Shortest Remaining Time First)**: A preemptive version of SJF where a running process can be preempted if a newly arrived process has a shorter remaining burst time.
-4. **Round Robin**: Preemptive, time-sliced scheduling where processes execute in a cyclic order for a specified time quantum.
-
-## Architecture and Package Responsibilities
-
-The project follows a clean layered architecture to keep concerns distinct:
-- `com.orchestrivo.domain`: Contains immutable domain objects like `ProcessSpec`, `ExecutionSegment`, and `Workload`. Enforces domain invariants (e.g., rejecting the reserved `IDLE` process ID).
-- `com.orchestrivo.scheduling`: Contains the `SchedulingStrategy` interface, configuration models, and the `MetricsCalculator` for computing wait time, turnaround time, throughput, etc.
-- `com.orchestrivo.scheduling.strategies`: Contains the concrete implementations of the scheduling algorithms (FCFS, SJF, SRTF, Round Robin).
-- `com.orchestrivo.validation`: Contains the `ScheduleValidator`, which independently verifies execution timelines, aggregate metrics, and result integrity without relying on the scheduling algorithm's logic.
+## Architecture
+- `com.orchestrivo.model`: Contains persistence and Data Transfer Objects (`User`, `WorkloadRecord`, `ExperimentRunRecord`).
+- `com.orchestrivo.domain`: Contains core domain objects like `ProcessSpec` and `ExecutionSegment` (kept pure, no persistence annotations).
+- `com.orchestrivo.scheduling`: Contains `SchedulingStrategy` implementations (FCFS, SJF, SRTF, Round Robin) and metric calculations.
+- `com.orchestrivo.persistence`: Contains interface definitions for repositories and their concrete JDBC implementations (`UserRepositoryJdbcImpl`, `WorkloadRepositoryJdbcImpl`, etc.).
+- `com.orchestrivo.service`: Application services (`AuthenticationService`, `WorkloadService`, `ExperimentService`) handling business logic and transactions.
+- `com.orchestrivo.web`: Servlets, Filters, Listeners, and the `ServiceRegistry` which binds layers together manually.
 
 ## Technology Stack and Prerequisites
 
 - **Java**: JDK 17 (Required)
-- **Build Tool**: Maven (Provided via Maven Wrapper, globally installed Maven is not required)
+- **Web Server**: Apache Tomcat (Requires support for Jakarta EE 10 / Servlet 6.0)
+- **Database**: MySQL 8.0+
+- **Build Tool**: Maven (Provided via Maven Wrapper)
 - **Testing**: JUnit 5
 
-## Repository Structure
+## Configuration and Deployment
 
-```text
-orchestrivo-job-execution-and-orchestration-platform/
-├── .mvn/wrapper/        # Maven wrapper configuration
-├── src/
-│   ├── main/java/       # Source code for domain, scheduling, and validation
-│   └── test/java/       # Comprehensive test suites (Unit and Integration)
-├── .gitignore           # Git ignore rules
-├── mvnw                 # Maven wrapper script for Unix
-├── mvnw.cmd             # Maven wrapper script for Windows
-├── pom.xml              # Maven configuration
-└── README.md            # This documentation
+### Database Setup
+1. Create a MySQL database (e.g., `orchestrivo`).
+2. Apply the schema migration located at `src/main/resources/db/V1__init_schema.sql`.
+3. Set the following environment variables (or provide defaults in `DataSourceManager`):
+   - `JDBC_URL`: e.g. `jdbc:mysql://localhost:3306/orchestrivo`
+   - `JDBC_USER`: e.g. `root`
+   - `JDBC_PASSWORD`: e.g. `password`
+
+### Building the Web Application
+You can build the project into a deployable WAR file using the included Maven Wrapper.
+
+**On Unix-like Systems (Linux/macOS):**
+```bash
+./mvnw clean package
 ```
 
-## Building and Testing
+**On Windows:**
+```cmd
+.\mvnw.cmd clean package
+```
 
-You do not need a globally installed Maven executable. You can build and test the project using the included Maven Wrapper.
+The resulting `orchestrivo.war` file will be generated in the `target/` directory.
 
-### On Unix-like Systems (Linux/macOS)
-
-- **Run all tests:**
-  ```bash
-  ./mvnw clean test
-  ```
-- **Package the application:**
-  ```bash
-  ./mvnw clean package
-  ```
-
-### On Windows
-
-- **Run all tests:**
-  ```cmd
-  .\mvnw.cmd clean test
-  ```
-- **Package the application:**
-  ```cmd
-  .\mvnw.cmd clean package
-  ```
+### Deployment
+1. Drop the `target/orchestrivo.war` file into your Tomcat `webapps/` directory.
+2. Ensure Tomcat has access to the database credentials.
+3. Access the application at `http://localhost:8080/orchestrivo`.
 
 ## Current Limitations
 
-- The project is purely a simulation engine at this stage. It does not control actual OS processes or run arbitrary executable programs.
-- The web interface (Servlets/JSP), authentication, authorization, and database persistence (JDBC/MySQL) are not yet implemented.
-- Background worker execution or distributed capabilities do not exist.
-- Advanced scheduling algorithms involving multiple cores, priority, or strict deadlines are not part of the initial phase.
+- **Simulation Only**: The project simulates scheduling. It does not execute actual OS processes.
+- **Single-Node**: This application is not yet distributed or cluster-aware.
+- **Frontend**: The UI uses simple HTML/CSS and vanilla JS. It does not utilize an advanced framework like React or Vue.
 
-## Planned Stage 2 Roadmap
+## Testing
 
-In Stage 2, Orchestrivo is planned to evolve into a full web application featuring:
-- A server-side rendered UI using Jakarta Servlets and JSP.
-- Secure user authentication and session management.
-- Persistent JDBC repositories (backed by MySQL) for workloads, execution metrics, and audit history.
-- Workload management via UI, including CSV imports and randomized generation.
-- Interactive algorithm comparison and visualizations (e.g., Gantt charts).
-- Rigorous implementation benchmarking tools.
+Run unit and integration tests using:
+```bash
+./mvnw clean test  # Unix
+.\mvnw.cmd clean test # Windows
+```
+*Note: Database integration tests will automatically skip if a local MySQL instance is not running and configured correctly.*
