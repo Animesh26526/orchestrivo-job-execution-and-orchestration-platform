@@ -25,6 +25,9 @@ public class LoginServlet extends HttpServlet {
             req.changeSessionId();
             session.setAttribute("user", user);
             session.setAttribute("csrfToken", UUID.randomUUID().toString());
+            if (ServiceRegistry.auditService != null) {
+                ServiceRegistry.auditService.log(user.getId(), "AUTH_LOGIN", "USER", String.valueOf(user.getId()), java.util.Map.of("email", user.getEmail()));
+            }
             resp.sendRedirect(req.getContextPath() + "/dashboard");
         } else {
             req.setAttribute("error", "Invalid email or password");

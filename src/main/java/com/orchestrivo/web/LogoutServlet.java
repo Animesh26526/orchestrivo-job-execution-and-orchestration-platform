@@ -11,6 +11,10 @@ public class LogoutServlet extends HttpServlet {
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         HttpSession session = req.getSession(false);
         if (session != null) {
+            com.orchestrivo.model.User user = (com.orchestrivo.model.User) session.getAttribute("user");
+            if (user != null && ServiceRegistry.auditService != null) {
+                ServiceRegistry.auditService.log(user.getId(), "AUTH_LOGOUT", "USER", String.valueOf(user.getId()), java.util.Map.of("email", user.getEmail()));
+            }
             session.invalidate();
         }
         resp.sendRedirect(req.getContextPath() + "/login");

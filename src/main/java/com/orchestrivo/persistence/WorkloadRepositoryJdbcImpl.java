@@ -143,6 +143,80 @@ public class WorkloadRepositoryJdbcImpl implements WorkloadRepository {
     }
 
     @Override
+    public WorkloadRecord update(WorkloadRecord record) {
+        if (record.getId() <= 0) {
+            throw new IllegalArgumentException("Cannot update workload without positive ID");
+        }
+        return save(record);
+    }
+
+    @Override
+    public List<WorkloadRecord> findWithFilter(long ownerUserId, String search, String sortBy, String sortDir, int offset, int limit) {
+        String safeColumn = "created_at";
+        if ("name".equalsIgnoreCase(sortBy)) safeColumn = "name";
+        else if ("id".equalsIgnoreCase(sortBy)) safeColumn = "id";
+        else if ("updated_at".equalsIgnoreCase(sortBy)) safeColumn = "updated_at";
+
+        String safeDir = "ASC".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
+
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        String sql = "SELECT * FROM workloads WHERE owner_user_id = ?"
+                + (hasSearch ? " AND LOWER(name) LIKE ?" : "")
+                + " ORDER BY " + safeColumn + " " + safeDir + ", id DESC LIMIT ? OFFSET ?";
+
+        List<WorkloadRecord> records = new ArrayList<>();
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            int idx = 1;
+            pstmt.setLong(idx++, ownerUserId);
+            if (hasSearch) {
+                pstmt.setString(idx++, "%" + search.trim().toLowerCase() + "%");
+            }
+            pstmt.setInt(idx++, safeLimit);
+            pstmt.setInt(idx++, safeOffset);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    WorkloadRecord record = mapRowToWorkloadRecord(rs);
+                    loadProcesses(conn, record);
+                    records.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error finding workloads with filter", e);
+        }
+        return records;
+    }
+
+    @Override
+    public int countWithFilter(long ownerUserId, String search) {
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        String sql = "SELECT COUNT(*) FROM workloads WHERE owner_user_id = ?"
+                + (hasSearch ? " AND LOWER(name) LIKE ?" : "");
+
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, ownerUserId);
+            if (hasSearch) {
+                pstmt.setString(2, "%" + search.trim().toLowerCase() + "%");
+            }
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error counting workloads with filter", e);
+        }
+        return 0;
+    }
+
+    @Override
     public void deleteById(long workloadId) {
         String sql = "DELETE FROM workloads WHERE id = ?";
         try (Connection conn = DataSourceManager.getDataSource().getConnection();

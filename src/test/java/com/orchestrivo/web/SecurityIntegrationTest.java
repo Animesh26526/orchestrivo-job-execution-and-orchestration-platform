@@ -394,4 +394,71 @@ public class SecurityIntegrationTest {
             assertTrue(expViewContent.contains("<c:out value=\"${seg.processId}\"/>"), "Experiments view should escape process ID");
         }
     }
+
+    @Test
+    void testCsrfEnforcementOnStage3Endpoints() throws ServletException, IOException {
+        AuthFilter filter = new AuthFilter();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+
+        when(request.getContextPath()).thenReturn("");
+        when(request.getMethod()).thenReturn("POST");
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        when(session.getAttribute("csrfToken")).thenReturn("correct-token");
+        when(request.getParameter("csrfToken")).thenReturn("wrong-token");
+
+        String[] mutatingPaths = {
+            "/workloads/edit",
+            "/workloads/duplicate",
+            "/workloads/import",
+            "/workloads/generate",
+            "/benchmarks/run",
+            "/benchmarks/delete"
+        };
+
+        for (String p : mutatingPaths) {
+            reset(response);
+            when(request.getRequestURI()).thenReturn(p);
+            filter.doFilter(request, response, filterChain);
+            verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or missing CSRF Token");
+        }
+    }
+
+    @Test
+    void testOwnershipEnforcementForBenchmarkRetrieval() throws ServletException, IOException {
+        BenchmarkServlet servlet = new BenchmarkServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+
+        when(request.getServletPath()).thenReturn("/benchmarks/view");
+        when(request.getParameter("id")).thenReturn("77");
+
+        com.orchestrivo.service.BenchmarkService benchmarkService = mock(com.orchestrivo.service.BenchmarkService.class);
+        ServiceRegistry.benchmarkService = benchmarkService;
+        when(benchmarkService.getBenchmarkById(77L, 1L)).thenReturn(Optional.empty());
+
+        servlet.doGet(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_NOT_FOUND, "Benchmark not found");
+    }
+
+    @Test
+    void testOwnershipEnforcementForWorkloadEdit() throws ServletException, IOException {
+        WorkloadServlet servlet = new WorkloadServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+
+        when(request.getServletPath()).thenReturn("/workloads/edit");
+        when(request.getParameter("id")).thenReturn("55");
+
+        WorkloadService workloadService = mock(WorkloadService.class);
+        ServiceRegistry.workloadService = workloadService;
+        when(workloadService.getWorkloadById(55L, 1L)).thenReturn(Optional.empty());
+
+        servlet.doGet(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_NOT_FOUND, "Workload not found");
+    }
 }

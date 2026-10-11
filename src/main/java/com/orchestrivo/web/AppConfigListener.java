@@ -32,8 +32,10 @@ public class AppConfigListener implements ServletContextListener {
         UserRepositoryJdbcImpl ur = new UserRepositoryJdbcImpl();
         WorkloadRepositoryJdbcImpl wr = new WorkloadRepositoryJdbcImpl();
         ExperimentRunRepositoryJdbcImpl er = new ExperimentRunRepositoryJdbcImpl();
+        com.orchestrivo.persistence.BenchmarkRepositoryJdbcImpl br = new com.orchestrivo.persistence.BenchmarkRepositoryJdbcImpl();
+        com.orchestrivo.persistence.AuditLogRepositoryJdbcImpl ar = new com.orchestrivo.persistence.AuditLogRepositoryJdbcImpl();
 
-        ServiceRegistry.initialize(ur, wr, er);
+        ServiceRegistry.initialize(ur, wr, er, br, ar);
         System.out.println("Orchestrivo initialized successfully.");
     }
 

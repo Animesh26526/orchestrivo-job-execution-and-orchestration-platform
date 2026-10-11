@@ -1,7 +1,13 @@
 package com.orchestrivo.model;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.orchestrivo.domain.ProcessSpec;
 import com.orchestrivo.domain.ScheduleResult;
+import java.lang.reflect.Type;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 public class ExperimentRunRecord {
     private long id;
@@ -9,6 +15,7 @@ public class ExperimentRunRecord {
     private long workloadId;
     private String algorithmName;
     private String algorithmParameters;
+    private String inputSnapshot;
     private String runStatus;
     private LocalDateTime createdAt;
     private LocalDateTime startedAt;
@@ -29,6 +36,8 @@ public class ExperimentRunRecord {
     public void setAlgorithmName(String algorithmName) { this.algorithmName = algorithmName; }
     public String getAlgorithmParameters() { return algorithmParameters; }
     public void setAlgorithmParameters(String algorithmParameters) { this.algorithmParameters = algorithmParameters; }
+    public String getInputSnapshot() { return inputSnapshot; }
+    public void setInputSnapshot(String inputSnapshot) { this.inputSnapshot = inputSnapshot; }
     public String getRunStatus() { return runStatus; }
     public void setRunStatus(String runStatus) { this.runStatus = runStatus; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -43,4 +52,16 @@ public class ExperimentRunRecord {
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
     public ScheduleResult getResult() { return result; }
     public void setResult(ScheduleResult result) { this.result = result; }
+
+    public List<ProcessSpec> getSnapshotProcesses() {
+        if (inputSnapshot == null || inputSnapshot.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            Type listType = new TypeToken<List<ProcessSpec>>(){}.getType();
+            return new Gson().fromJson(inputSnapshot, listType);
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
 }

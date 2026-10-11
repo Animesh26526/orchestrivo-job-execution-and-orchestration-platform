@@ -23,9 +23,9 @@ public class ExperimentRunRepositoryJdbcImpl implements ExperimentRunRepository 
         
         String sqlRun;
         if (isUpdate) {
-            sqlRun = "UPDATE experiment_runs SET owner_user_id=?, workload_id=?, algorithm_name=?, algorithm_parameters=?, run_status=?, started_at=?, completed_at=?, validation_status=?, average_waiting_time=?, average_turnaround_time=?, average_response_time=?, simulated_throughput=?, context_switches=?, cpu_idle_time=?, total_duration=?, error_message=? WHERE id=?";
+            sqlRun = "UPDATE experiment_runs SET owner_user_id=?, workload_id=?, algorithm_name=?, algorithm_parameters=?, input_snapshot=?, run_status=?, started_at=?, completed_at=?, validation_status=?, average_waiting_time=?, average_turnaround_time=?, average_response_time=?, simulated_throughput=?, context_switches=?, cpu_idle_time=?, total_duration=?, error_message=? WHERE id=?";
         } else {
-            sqlRun = "INSERT INTO experiment_runs (owner_user_id, workload_id, algorithm_name, algorithm_parameters, run_status, started_at, completed_at, validation_status, average_waiting_time, average_turnaround_time, average_response_time, simulated_throughput, context_switches, cpu_idle_time, total_duration, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            sqlRun = "INSERT INTO experiment_runs (owner_user_id, workload_id, algorithm_name, algorithm_parameters, input_snapshot, run_status, started_at, completed_at, validation_status, average_waiting_time, average_turnaround_time, average_response_time, simulated_throughput, context_switches, cpu_idle_time, total_duration, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         }
 
         Connection conn = null;
@@ -38,37 +38,38 @@ public class ExperimentRunRepositoryJdbcImpl implements ExperimentRunRepository 
                 pstmt.setLong(2, record.getWorkloadId());
                 pstmt.setString(3, record.getAlgorithmName());
                 pstmt.setString(4, record.getAlgorithmParameters());
-                pstmt.setString(5, record.getRunStatus());
+                pstmt.setString(5, record.getInputSnapshot());
+                pstmt.setString(6, record.getRunStatus());
                 
-                pstmt.setTimestamp(6, record.getStartedAt() != null ? Timestamp.valueOf(record.getStartedAt()) : null);
-                pstmt.setTimestamp(7, record.getCompletedAt() != null ? Timestamp.valueOf(record.getCompletedAt()) : null);
+                pstmt.setTimestamp(7, record.getStartedAt() != null ? Timestamp.valueOf(record.getStartedAt()) : null);
+                pstmt.setTimestamp(8, record.getCompletedAt() != null ? Timestamp.valueOf(record.getCompletedAt()) : null);
                 
-                pstmt.setString(8, record.getValidationStatus());
+                pstmt.setString(9, record.getValidationStatus());
                 
                 ScheduleResult result = record.getResult();
                 if (result != null && result.getAggregateMetrics() != null) {
                     AggregateMetrics am = result.getAggregateMetrics();
-                    pstmt.setDouble(9, am.getAverageWaitingTime());
-                    pstmt.setDouble(10, am.getAverageTurnaroundTime());
-                    pstmt.setDouble(11, am.getAverageResponseTime());
-                    pstmt.setDouble(12, am.getThroughput());
-                    pstmt.setInt(13, am.getContextSwitchCount());
-                    pstmt.setInt(14, am.getCpuIdleTime());
-                    pstmt.setInt(15, am.getTotalDuration());
+                    pstmt.setDouble(10, am.getAverageWaitingTime());
+                    pstmt.setDouble(11, am.getAverageTurnaroundTime());
+                    pstmt.setDouble(12, am.getAverageResponseTime());
+                    pstmt.setDouble(13, am.getThroughput());
+                    pstmt.setInt(14, am.getContextSwitchCount());
+                    pstmt.setInt(15, am.getCpuIdleTime());
+                    pstmt.setInt(16, am.getTotalDuration());
                 } else {
-                    pstmt.setNull(9, Types.DOUBLE);
                     pstmt.setNull(10, Types.DOUBLE);
                     pstmt.setNull(11, Types.DOUBLE);
                     pstmt.setNull(12, Types.DOUBLE);
-                    pstmt.setNull(13, Types.INTEGER);
+                    pstmt.setNull(13, Types.DOUBLE);
                     pstmt.setNull(14, Types.INTEGER);
                     pstmt.setNull(15, Types.INTEGER);
+                    pstmt.setNull(16, Types.INTEGER);
                 }
                 
-                pstmt.setString(16, record.getErrorMessage());
+                pstmt.setString(17, record.getErrorMessage());
                 
                 if (isUpdate) {
-                    pstmt.setLong(17, record.getId());
+                    pstmt.setLong(18, record.getId());
                     pstmt.executeUpdate();
                     
                     try (PreparedStatement delRes = conn.prepareStatement("DELETE FROM process_results WHERE experiment_run_id = ?")) {
@@ -224,6 +225,90 @@ public class ExperimentRunRepositoryJdbcImpl implements ExperimentRunRepository 
         }
     }
     
+    @Override
+    public List<ExperimentRunRecord> findWithFilter(long ownerUserId, Long workloadId, String algorithm, String sortBy, String sortDir, int offset, int limit) {
+        String safeColumn = "created_at";
+        if ("id".equalsIgnoreCase(sortBy)) safeColumn = "id";
+        else if ("algorithm_name".equalsIgnoreCase(sortBy)) safeColumn = "algorithm_name";
+        else if ("total_duration".equalsIgnoreCase(sortBy)) safeColumn = "total_duration";
+        else if ("validation_status".equalsIgnoreCase(sortBy)) safeColumn = "validation_status";
+
+        String safeDir = "ASC".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
+
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+
+        StringBuilder sql = new StringBuilder("SELECT * FROM experiment_runs WHERE owner_user_id = ?");
+        List<Object> params = new ArrayList<>();
+        params.add(ownerUserId);
+
+        if (workloadId != null && workloadId > 0) {
+            sql.append(" AND workload_id = ?");
+            params.add(workloadId);
+        }
+        if (algorithm != null && !algorithm.trim().isEmpty()) {
+            sql.append(" AND algorithm_name = ?");
+            params.add(algorithm.trim().toUpperCase());
+        }
+
+        sql.append(" ORDER BY ").append(safeColumn).append(" ").append(safeDir).append(", id DESC LIMIT ? OFFSET ?");
+        params.add(safeLimit);
+        params.add(safeOffset);
+
+        List<ExperimentRunRecord> records = new ArrayList<>();
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                pstmt.setObject(i + 1, params.get(i));
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    ExperimentRunRecord record = mapRowToRunRecord(rs);
+                    loadResult(conn, record);
+                    records.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error finding experiment runs with filter", e);
+        }
+        return records;
+    }
+
+    @Override
+    public int countWithFilter(long ownerUserId, Long workloadId, String algorithm) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM experiment_runs WHERE owner_user_id = ?");
+        List<Object> params = new ArrayList<>();
+        params.add(ownerUserId);
+
+        if (workloadId != null && workloadId > 0) {
+            sql.append(" AND workload_id = ?");
+            params.add(workloadId);
+        }
+        if (algorithm != null && !algorithm.trim().isEmpty()) {
+            sql.append(" AND algorithm_name = ?");
+            params.add(algorithm.trim().toUpperCase());
+        }
+
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                pstmt.setObject(i + 1, params.get(i));
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error counting experiment runs with filter", e);
+        }
+        return 0;
+    }
+
     private ExperimentRunRecord mapRowToRunRecord(ResultSet rs) throws SQLException {
         ExperimentRunRecord record = new ExperimentRunRecord();
         record.setId(rs.getLong("id"));
@@ -231,6 +316,7 @@ public class ExperimentRunRepositoryJdbcImpl implements ExperimentRunRepository 
         record.setWorkloadId(rs.getLong("workload_id"));
         record.setAlgorithmName(rs.getString("algorithm_name"));
         record.setAlgorithmParameters(rs.getString("algorithm_parameters"));
+        record.setInputSnapshot(rs.getString("input_snapshot"));
         record.setRunStatus(rs.getString("run_status"));
         
         Timestamp created = rs.getTimestamp("created_at");

@@ -25,6 +25,9 @@ public class RegisterServlet extends HttpServlet {
             req.changeSessionId();
             session.setAttribute("user", user);
             session.setAttribute("csrfToken", UUID.randomUUID().toString());
+            if (ServiceRegistry.auditService != null) {
+                ServiceRegistry.auditService.log(user.getId(), "AUTH_REGISTER", "USER", String.valueOf(user.getId()), java.util.Map.of("email", user.getEmail()));
+            }
             resp.sendRedirect(req.getContextPath() + "/dashboard");
         } catch (IllegalArgumentException e) {
             req.setAttribute("error", e.getMessage());
