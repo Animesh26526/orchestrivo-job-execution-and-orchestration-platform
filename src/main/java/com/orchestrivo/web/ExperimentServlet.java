@@ -1,6 +1,7 @@
 package com.orchestrivo.web;
 
 import com.orchestrivo.model.ComparisonResult;
+import com.orchestrivo.model.ExecutionJobRecord;
 import com.orchestrivo.model.ExperimentRunRecord;
 import com.orchestrivo.model.PagedResult;
 import com.orchestrivo.model.User;
@@ -189,11 +190,25 @@ public class ExperimentServlet extends HttpServlet {
                 return;
             }
 
-            ExperimentRunRecord run = ServiceRegistry.experimentService.runExperiment(wr.get(), algorithmName, quantum, user.getId());
-            if (ServiceRegistry.auditService != null) {
-                ServiceRegistry.auditService.log(user.getId(), "EXPERIMENT_RUN", "EXPERIMENT_RUN", String.valueOf(run.getId()), Map.of("algorithm", run.getAlgorithmName(), "workloadId", workloadId));
+            String mode = req.getParameter("mode");
+            boolean runSync = "sync".equalsIgnoreCase(mode) || "false".equalsIgnoreCase(req.getParameter("async"));
+
+            if (runSync || ServiceRegistry.executionJobService == null) {
+                // Synchronous fallback
+                ExperimentRunRecord run = ServiceRegistry.experimentService.runExperiment(wr.get(), algorithmName, quantum, user.getId());
+                if (ServiceRegistry.auditService != null) {
+                    ServiceRegistry.auditService.log(user.getId(), "EXPERIMENT_RUN", "EXPERIMENT_RUN", String.valueOf(run.getId()), Map.of("algorithm", run.getAlgorithmName(), "workloadId", workloadId));
+                }
+                resp.sendRedirect(req.getContextPath() + "/experiments/view?id=" + run.getId());
+            } else {
+                // Background persistent job queue
+                String idempotencyKey = req.getParameter("idempotencyKey");
+                ExecutionJobRecord job = ServiceRegistry.executionJobService.enqueueExperiment(wr.get(), algorithmName, quantum, user.getId(), idempotencyKey);
+                if (ServiceRegistry.auditService != null) {
+                    ServiceRegistry.auditService.log(user.getId(), "JOB_ENQUEUED", "EXECUTION_JOB", String.valueOf(job.getId()), Map.of("algorithm", algorithmName, "workloadId", workloadId));
+                }
+                resp.sendRedirect(req.getContextPath() + "/jobs/view?id=" + job.getId());
             }
-            resp.sendRedirect(req.getContextPath() + "/experiments/view?id=" + run.getId());
         } catch (Exception e) {
             getServletContext().log("Experiment execution failed for workloadId=" + req.getParameter("workloadId") + ": " + e.toString());
             resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Failed to start experiment due to invalid configuration or internal error.");

@@ -1,55 +1,104 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generate Seeded Workload - Orchestrivo</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; line-height: 1.5; }
-        .error { color: #d9534f; background: #fdf7f7; border: 1px solid #eed3d7; padding: 10px; margin-bottom: 15px; }
-        .note { background: #eef7fb; border: 1px solid #bce8f1; padding: 10px; margin-bottom: 15px; }
-    </style>
+    <link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/app.css">
 </head>
 <body>
-<h2>Generate Seeded Workload</h2>
-<p><a href="<%= request.getContextPath() %>/workloads">Back to Workloads</a></p>
 
-<div class="note">
-    <strong>Reproducible Workload Generation:</strong><br/>
-    Process arrival and burst parameters are generated deterministically using a fixed pseudo-random seed. Using the same seed and parameters reproduces the identical process workload.
+<jsp:include page="/WEB-INF/views/layout/navbar.jsp"/>
+
+<div class="app-container">
+    <div class="breadcrumb-bar">
+        <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="<%= request.getContextPath() %>/workloads">Workloads</a>
+        <span class="breadcrumb-separator">/</span>
+        <span>Generate Seeded Workload</span>
+    </div>
+
+    <div class="page-header">
+        <div class="page-title-group">
+            <h1>Deterministic Workload Generator</h1>
+            <p class="page-subtitle">Generate synthetic process workloads using seeded pseudo-random numbers</p>
+        </div>
+        <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/workloads" class="btn btn-secondary">&larr; Back to Workloads</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <div>
+            <strong>Reproducible Generation Protocol:</strong>
+            <p style="margin-top: 4px;">
+                Using a fixed random seed ensures identical process arrival and burst distributions across any execution host. This provides mathematical reproducibility for scientific benchmarking and algorithm comparison.
+            </p>
+        </div>
+    </div>
+
+    <c:if test="${not empty error}">
+        <div class="alert alert-danger">
+            <c:out value="${error}"/>
+        </div>
+    </c:if>
+
+    <div class="card" style="max-width: 700px;">
+        <form action="<%= request.getContextPath() %>/workloads/generate" method="post">
+            <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>
+
+            <div class="form-group">
+                <label class="form-label" for="genName">Workload Name</label>
+                <input type="text" id="genName" name="name" class="form-input" value="Synthetic Seeded Workload" required>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label" for="processCount">Process Count (1 - 200)</label>
+                    <input type="number" id="processCount" name="processCount" class="form-input" value="10" min="1" max="200" required>
+                    <div class="form-hint">Number of processes to generate</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="seed">Random Seed (Long)</label>
+                    <input type="number" id="seed" name="seed" class="form-input" value="42" required>
+                    <div class="form-hint">Identical seed creates identical processes</div>
+                </div>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label" for="minArrival">Min Arrival Time (&ge; 0)</label>
+                    <input type="number" id="minArrival" name="minArrival" class="form-input" value="0" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="maxArrival">Max Arrival Time</label>
+                    <input type="number" id="maxArrival" name="maxArrival" class="form-input" value="15" min="0" required>
+                </div>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label" for="minBurst">Min Burst Duration (&ge; 1)</label>
+                    <input type="number" id="minBurst" name="minBurst" class="form-input" value="1" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="maxBurst">Max Burst Duration</label>
+                    <input type="number" id="maxBurst" name="maxBurst" class="form-input" value="10" min="1" required>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px; display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Generate Workload</button>
+                <a href="<%= request.getContextPath() %>/workloads" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
 </div>
 
-<c:if test="${not empty error}">
-    <div class="error"><c:out value="${error}"/></div>
-</c:if>
-
-<form action="<%= request.getContextPath() %>/workloads/generate" method="post">
-    <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>
-
-    <label>Workload Name: <br/>
-        <input type="text" name="name" value="Generated Workload" required size="40"/>
-    </label><br/><br/>
-
-    <label>Process Count (1 - 200): <br/>
-        <input type="number" name="processCount" value="10" min="1" max="200" required/>
-    </label><br/><br/>
-
-    <label>Arrival Time Range: <br/>
-        Min: <input type="number" name="minArrival" value="0" min="0" required/>
-        Max: <input type="number" name="maxArrival" value="15" min="0" required/>
-    </label><br/><br/>
-
-    <label>Burst Time Range: <br/>
-        Min: <input type="number" name="minBurst" value="1" min="1" required/>
-        Max: <input type="number" name="maxBurst" value="10" min="1" required/>
-    </label><br/><br/>
-
-    <label>Random Seed: <br/>
-        <input type="number" name="seed" value="42" required/>
-    </label><br/><br/>
-
-    <button type="submit">Generate Workload</button>
-</form>
-
+<script src="<%= request.getContextPath() %>/assets/js/app.js"></script>
 </body>
 </html>

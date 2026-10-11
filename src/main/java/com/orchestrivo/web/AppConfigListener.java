@@ -4,6 +4,9 @@ import com.orchestrivo.persistence.DataSourceManager;
 import com.orchestrivo.persistence.UserRepositoryJdbcImpl;
 import com.orchestrivo.persistence.WorkloadRepositoryJdbcImpl;
 import com.orchestrivo.persistence.ExperimentRunRepositoryJdbcImpl;
+import com.orchestrivo.persistence.BenchmarkRepositoryJdbcImpl;
+import com.orchestrivo.persistence.AuditLogRepositoryJdbcImpl;
+import com.orchestrivo.persistence.ExecutionJobRepositoryJdbcImpl;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
@@ -26,22 +29,37 @@ public class AppConfigListener implements ServletContextListener {
         if ("true".equalsIgnoreCase(System.getenv("PRODUCTION_HTTPS"))) {
             sessionCookieConfig.setSecure(true);
         }
-        // Initialize DataSource (will read from env or local config)
-        DataSourceManager.getDataSource();
-        
-        UserRepositoryJdbcImpl ur = new UserRepositoryJdbcImpl();
-        WorkloadRepositoryJdbcImpl wr = new WorkloadRepositoryJdbcImpl();
-        ExperimentRunRepositoryJdbcImpl er = new ExperimentRunRepositoryJdbcImpl();
-        com.orchestrivo.persistence.BenchmarkRepositoryJdbcImpl br = new com.orchestrivo.persistence.BenchmarkRepositoryJdbcImpl();
-        com.orchestrivo.persistence.AuditLogRepositoryJdbcImpl ar = new com.orchestrivo.persistence.AuditLogRepositoryJdbcImpl();
 
-        ServiceRegistry.initialize(ur, wr, er, br, ar);
-        System.out.println("Orchestrivo initialized successfully.");
+        try {
+            // Initialize DataSource (reads from env or local config)
+            DataSourceManager.getDataSource();
+            
+            UserRepositoryJdbcImpl ur = new UserRepositoryJdbcImpl();
+            WorkloadRepositoryJdbcImpl wr = new WorkloadRepositoryJdbcImpl();
+            ExperimentRunRepositoryJdbcImpl er = new ExperimentRunRepositoryJdbcImpl();
+            BenchmarkRepositoryJdbcImpl br = new BenchmarkRepositoryJdbcImpl();
+            AuditLogRepositoryJdbcImpl ar = new AuditLogRepositoryJdbcImpl();
+            ExecutionJobRepositoryJdbcImpl jr = new ExecutionJobRepositoryJdbcImpl();
+
+            ServiceRegistry.initialize(ur, wr, er, br, ar, jr);
+
+            // Start the background execution engine
+            if (ServiceRegistry.workerManager != null) {
+                ServiceRegistry.workerManager.start();
+            }
+
+            System.out.println("Orchestrivo initialized successfully with background worker engine.");
+        } catch (Exception e) {
+            System.err.println("Warning: Orchestrivo failed to initialize DataSource or background worker: " + e.getMessage());
+        }
     }
 
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
+        if (ServiceRegistry.workerManager != null) {
+            ServiceRegistry.workerManager.shutdown();
+        }
         DataSourceManager.closeDataSource();
-        System.out.println("Orchestrivo shutting down.");
+        System.out.println("Orchestrivo shut down cleanly.");
     }
 }

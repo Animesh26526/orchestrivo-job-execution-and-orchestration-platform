@@ -1,112 +1,216 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Benchmark #${benchmark.id} Details - Orchestrivo</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benchmark #${benchmark.id} Report - Orchestrivo</title>
+    <link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/app.css">
     <style>
-        body { font-family: sans-serif; margin: 20px; line-height: 1.5; color: #333; }
-        .nav { margin-bottom: 15px; }
-        .nav a { margin-right: 15px; text-decoration: none; color: #0066cc; }
-        .card { background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin: 15px 0; max-width: 900px; }
-        .metric-grid { display: flex; flex-wrap: wrap; gap: 15px; margin: 15px 0; }
-        .metric-box { background: #f0f4f8; border: 1px solid #d0dbe5; border-radius: 4px; padding: 12px 18px; min-width: 160px; }
-        .metric-label { font-size: 0.85em; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-        .metric-value { font-size: 1.4em; font-weight: bold; color: #1a365d; margin-top: 4px; }
-        table { border-collapse: collapse; width: 100%; max-width: 900px; margin-top: 10px; margin-bottom: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-        th { background: #f4f6f8; font-weight: 600; }
-        tr:nth-child(even) { background: #fafbfc; }
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.85em; font-weight: bold; }
-        .badge-success { background: #e6f4ea; color: #137333; }
-        .badge-danger { background: #fce8e6; color: #c5221f; }
-        .env-box { background: #2b2b2b; color: #f8f8f2; font-family: monospace; padding: 12px 16px; border-radius: 4px; overflow-x: auto; max-width: 900px; font-size: 0.9em; white-space: pre-wrap; }
-        .note { font-size: 0.9em; color: #555; background: #fff8e1; border-left: 4px solid #ffb300; padding: 10px 14px; margin: 15px 0; max-width: 900px; }
-        .btn { display: inline-block; padding: 6px 14px; background: #0066cc; color: #fff; text-decoration: none; border-radius: 4px; font-size: 0.9em; border: none; cursor: pointer; }
-        .btn:hover { background: #0052a3; }
+        .latency-chart-container {
+            width: 100%;
+            height: 220px;
+            background: #ffffff;
+            border: 1px solid var(--color-slate-200);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-top: 14px;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
 
-<div class="nav">
-    <a href="<%= request.getContextPath() %>/benchmarks">&larr; Back to Benchmarks</a>
-    <a href="<%= request.getContextPath() %>/benchmarks/run">Run New Benchmark</a>
-    <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
+<jsp:include page="/WEB-INF/views/layout/navbar.jsp"/>
+
+<div class="app-container">
+    <div class="breadcrumb-bar">
+        <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="<%= request.getContextPath() %>/benchmarks">Benchmarks</a>
+        <span class="breadcrumb-separator">/</span>
+        <span>Benchmark #${benchmark.id}</span>
+    </div>
+
+    <div class="page-header">
+        <div class="page-title-group">
+            <h1>Micro-Benchmark Report #${benchmark.id}: <c:out value="${benchmark.algorithmName}"/></h1>
+            <p class="page-subtitle">${benchmark.processCount} synthetic processes &bull; ${benchmark.measuredIterations} timed iterations</p>
+        </div>
+        <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/benchmarks" class="btn btn-secondary">&larr; Back to Benchmarks</a>
+            <a href="<%= request.getContextPath() %>/benchmarks/run" class="btn btn-primary">+ Run New Benchmark</a>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Benchmark Run Configuration</h2>
+            <span class="badge ${benchmark.validationPassed ? 'badge-success' : 'badge-danger'}">
+                ${benchmark.validationPassed ? 'PASSED (100% Invariants Verified)' : 'FAILED'}
+            </span>
+        </div>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <td style="width: 240px; font-weight: 600;">Algorithm:</td>
+                        <td><strong><c:out value="${benchmark.algorithmName}"/></strong></td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Process Count:</td>
+                        <td>${benchmark.processCount} processes</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Reproducibility Seed:</td>
+                        <td><code>${benchmark.seed}</code></td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Protocol Iterations:</td>
+                        <td>${benchmark.warmupIterations} warm-up cycles &bull; ${benchmark.measuredIterations} measured repetitions</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Execution Timestamp:</td>
+                        <td><c:out value="${benchmark.createdAt}"/></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Statistical Metric Cards -->
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--color-slate-900);">Statistical Latency Summary (Wall-Clock Host Engine)</h2>
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-header">
+                <span class="metric-label">Median Latency</span>
+                <span class="badge badge-primary">P50</span>
+            </div>
+            <div class="metric-value">${benchmark.medianMicros} &micro;s</div>
+            <div class="metric-subtext">(${benchmark.medianMillis} ms)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-header">
+                <span class="metric-label">Min Latency</span>
+                <span class="badge badge-success">Fastest</span>
+            </div>
+            <div class="metric-value">${benchmark.minMicros} &micro;s</div>
+            <div class="metric-subtext">(${benchmark.minMillis} ms)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-header">
+                <span class="metric-label">Max Latency</span>
+                <span class="badge badge-warning">Slowest</span>
+            </div>
+            <div class="metric-value">${benchmark.maxMicros} &micro;s</div>
+            <div class="metric-subtext">(${benchmark.maxMillis} ms)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-header">
+                <span class="metric-label">Std Deviation</span>
+                <span class="badge badge-neutral">Variance</span>
+            </div>
+            <div class="metric-value">${benchmark.stdDevMicros} &micro;s</div>
+            <div class="metric-subtext">(${benchmark.stdDevMillis} ms)</div>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <div>
+            <strong>Host Latency vs Scheduling Domain Separation:</strong>
+            These latency measurements capture raw JVM execution time of the scheduling algorithm in memory. They are strictly separate from simulated scheduling domain metrics (e.g. turnaround time or waiting time). Furthermore, these micro-benchmarks are isolated execution measurements on the local host machine, not proof of clustered or distributed throughput.
+        </div>
+    </div>
+
+    <!-- Latency Distribution SVG Chart -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Per-Iteration Latency Distribution</h2>
+                <p class="card-description">Sequential latency across measured repetitions (Microseconds &micro;s)</p>
+            </div>
+            <div style="font-size: 12px; color: var(--color-slate-500);">
+                Min: <strong>${benchmark.minMicros} &micro;s</strong> &bull; Median: <strong>${benchmark.medianMicros} &micro;s</strong> &bull; Max: <strong>${benchmark.maxMicros} &micro;s</strong>
+            </div>
+        </div>
+        <div class="latency-chart-container">
+            <svg id="latencySvg" width="100%" height="190" viewBox="0 0 800 180" preserveAspectRatio="none">
+                <!-- Grid background lines -->
+                <line x1="40" y1="20" x2="780" y2="20" stroke="#f1f5f9" stroke-dasharray="3,3" />
+                <line x1="40" y1="80" x2="780" y2="80" stroke="#f1f5f9" stroke-dasharray="3,3" />
+                <line x1="40" y1="140" x2="780" y2="140" stroke="#e2e8f0" />
+
+                <!-- Iteration bars/polyline -->
+                <c:set var="mCount" value="${benchmark.measurements.size()}"/>
+                <c:set var="maxMicrosVal" value="${benchmark.maxMicros > 0 ? benchmark.maxMicros : 1}"/>
+                <c:forEach var="m" items="${benchmark.measurements}" varStatus="status">
+                    <c:set var="micros" value="${m.durationNanos / 1000.0}"/>
+                    <c:set var="barX" value="${40 + (status.index * (740.0 / (mCount > 1 ? mCount - 1 : 1)))}"/>
+                    <c:set var="barH" value="${(micros / maxMicrosVal) * 120.0}"/>
+                    <c:set var="barY" value="${140 - barH}"/>
+                    <rect x="${barX - 1.5}" y="${barY}" width="3" height="${barH}" fill="#3b82f6" opacity="0.85">
+                        <title>Iteration #${m.iterationNumber}: ${micros} &micro;s</title>
+                    </rect>
+                </c:forEach>
+
+                <!-- Labels -->
+                <text x="35" y="24" fill="#94a3b8" font-size="10" text-anchor="end">${benchmark.maxMicros}&micro;s</text>
+                <text x="35" y="84" fill="#94a3b8" font-size="10" text-anchor="end">${benchmark.medianMicros}&micro;s</text>
+                <text x="35" y="144" fill="#94a3b8" font-size="10" text-anchor="end">0&micro;s</text>
+                <text x="40" y="165" fill="#64748b" font-size="10">Iter #1</text>
+                <text x="780" y="165" fill="#64748b" font-size="10" text-anchor="end">Iter #${benchmark.measurements.size()}</text>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Host Runtime Environment -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Host Runtime Environment Metadata</h2>
+                <p class="card-description">JVM, CPU, and host OS specifications captured during execution</p>
+            </div>
+        </div>
+        <div class="code-box">
+            <c:out value="${benchmark.environmentInfo}"/>
+        </div>
+    </div>
+
+    <!-- Measured Iterations Table -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Recorded Repetition Iterations</h2>
+                <p class="card-description">${benchmark.measurements.size()} timed repetitions</p>
+            </div>
+        </div>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none; max-height: 360px; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Iteration #</th>
+                        <th>Duration (Nanoseconds)</th>
+                        <th>Duration (Microseconds)</th>
+                        <th>Duration (Milliseconds)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <c:forEach var="m" items="${benchmark.measurements}">
+                    <tr>
+                        <td><strong>#${m.iterationNumber}</strong></td>
+                        <td><code>${m.durationNanos} ns</code></td>
+                        <td><strong>${String.format('%.2f', m.durationNanos / 1000.0)} &micro;s</strong></td>
+                        <td>${String.format('%.4f', m.durationNanos / 1000000.0)} ms</td>
+                    </tr>
+                </c:forEach>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
-<h2>Micro-Benchmark Run #${benchmark.id}</h2>
-
-<div class="card">
-    <table style="width: auto; margin: 0; border: none;">
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Algorithm:</td><td style="border:none; padding: 4px 10px;"><strong><c:out value="${benchmark.algorithmName}"/></strong></td></tr>
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Process Count:</td><td style="border:none; padding: 4px 10px;">${benchmark.processCount}</td></tr>
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Reproducibility Seed:</td><td style="border:none; padding: 4px 10px;">${benchmark.seed}</td></tr>
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Warm-Up / Measured Iterations:</td><td style="border:none; padding: 4px 10px;">${benchmark.warmupIterations} warm-up / ${benchmark.measuredIterations} measured</td></tr>
-        <tr>
-            <td style="border:none; padding: 4px 10px; font-weight:bold;">Validation Across Runs:</td>
-            <td style="border:none; padding: 4px 10px;">
-                <span class="badge ${benchmark.validationPassed ? 'badge-success' : 'badge-danger'}">
-                    ${benchmark.validationPassed ? 'PASSED (All schedules validated)' : 'FAILED'}
-                </span>
-            </td>
-        </tr>
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Execution Timestamp:</td><td style="border:none; padding: 4px 10px;"><c:out value="${benchmark.createdAt}"/></td></tr>
-    </table>
-</div>
-
-<h3>Statistical Execution Metrics (Wall-Clock Latency)</h3>
-<div class="metric-grid">
-    <div class="metric-box">
-        <div class="metric-label">Median Latency</div>
-        <div class="metric-value">${benchmark.medianMicros} µs</div>
-        <small style="color: #666;">(${benchmark.medianMillis} ms)</small>
-    </div>
-    <div class="metric-box">
-        <div class="metric-label">Min Latency</div>
-        <div class="metric-value">${benchmark.minMicros} µs</div>
-        <small style="color: #666;">(${benchmark.minMillis} ms)</small>
-    </div>
-    <div class="metric-box">
-        <div class="metric-label">Max Latency</div>
-        <div class="metric-value">${benchmark.maxMicros} µs</div>
-        <small style="color: #666;">(${benchmark.maxMillis} ms)</small>
-    </div>
-    <div class="metric-box">
-        <div class="metric-label">Std Deviation</div>
-        <div class="metric-value">${benchmark.stdDevMicros} µs</div>
-        <small style="color: #666;">(${benchmark.stdDevMillis} ms)</small>
-    </div>
-</div>
-
-<div class="note">
-    <strong>Timing vs Domain Metric Separation:</strong>
-    These metrics reflect engine code execution performance on the host JVM. They are completely separate from simulated metrics (e.g. turnaround time or waiting time), which model CPU scheduler domain behavior.
-</div>
-
-<h3>Host Runtime Environment</h3>
-<div class="env-box"><c:out value="${benchmark.environmentInfo}"/></div>
-
-<h3>Measured Iterations (${benchmark.measurements.size()} iterations recorded)</h3>
-<table>
-    <thead>
-        <tr>
-            <th>Iteration #</th>
-            <th>Duration (Nanoseconds)</th>
-            <th>Duration (Microseconds)</th>
-            <th>Duration (Milliseconds)</th>
-        </tr>
-    </thead>
-    <tbody>
-    <c:forEach var="m" items="${benchmark.measurements}">
-        <tr>
-            <td>${m.iterationNumber}</td>
-            <td>${m.durationNanos} ns</td>
-            <td>${m.durationMicros} µs</td>
-            <td>${m.durationMillis} ms</td>
-        </tr>
-    </c:forEach>
-    </tbody>
-</table>
-
+<script src="<%= request.getContextPath() %>/assets/js/app.js"></script>
 </body>
 </html>

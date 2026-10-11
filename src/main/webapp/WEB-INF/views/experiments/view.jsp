@@ -1,206 +1,320 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Experiment #${experiment.id} Details - Orchestrivo</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; line-height: 1.5; color: #333; }
-        .nav { margin-bottom: 15px; }
-        .nav a { margin-right: 15px; text-decoration: none; color: #0066cc; }
-        .card { background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin: 15px 0; max-width: 900px; }
-        .metric-grid { display: flex; flex-wrap: wrap; gap: 15px; margin: 15px 0; }
-        .metric-box { background: #f0f4f8; border: 1px solid #d0dbe5; border-radius: 4px; padding: 12px 18px; min-width: 160px; }
-        .metric-label { font-size: 0.85em; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-        .metric-value { font-size: 1.4em; font-weight: bold; color: #1a365d; margin-top: 4px; }
-        table { border-collapse: collapse; width: 100%; max-width: 900px; margin-top: 10px; margin-bottom: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-        th { background: #f4f6f8; font-weight: 600; }
-        tr:nth-child(even) { background: #fafbfc; }
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.85em; font-weight: bold; }
-        .badge-succeeded { background: #e6f4ea; color: #137333; }
-        .badge-failed { background: #fce8e6; color: #c5221f; }
-        .badge-valid { background: #e6f4ea; color: #137333; }
-        .badge-invalid { background: #fce8e6; color: #c5221f; }
-        .badge-error { background: #fef7e0; color: #b06000; }
-        .timeline-bar-container { display: flex; width: 100%; max-width: 900px; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; height: 36px; margin: 15px 0; background: #eee; }
-        .timeline-block { display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.4); border-right: 1px solid rgba(255,255,255,0.5); overflow: hidden; }
-        .btn { display: inline-block; padding: 6px 12px; background: #0066cc; color: #fff; text-decoration: none; border-radius: 4px; font-size: 0.9em; border: none; cursor: pointer; }
-        .btn:hover { background: #0052a3; }
-        .note { font-size: 0.9em; color: #555; background: #fff8e1; border-left: 4px solid #ffb300; padding: 8px 12px; margin: 10px 0; max-width: 900px; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiment Run #${experiment.id} - Orchestrivo</title>
+    <link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/app.css">
 </head>
 <body>
 
-<div class="nav">
-    <a href="<%= request.getContextPath() %>/experiments">&larr; Back to Experiments</a>
-    <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
-    <a href="<%= request.getContextPath() %>/workloads/view?id=${experiment.workloadId}">View Workload</a>
-</div>
+<jsp:include page="/WEB-INF/views/layout/navbar.jsp"/>
 
-<h2>Experiment Run #${experiment.id}</h2>
+<div class="app-container">
+    <div class="breadcrumb-bar">
+        <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="<%= request.getContextPath() %>/experiments">Experiments</a>
+        <span class="breadcrumb-separator">/</span>
+        <span>Run #${experiment.id}</span>
+    </div>
 
-<div class="card">
-    <table style="width: auto; margin: 0; border: none;">
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Algorithm:</td><td style="border:none; padding: 4px 10px;"><c:out value="${experiment.algorithmName}"/></td></tr>
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Parameters:</td><td style="border:none; padding: 4px 10px;"><c:out value="${experiment.algorithmParameters}" default="None"/></td></tr>
-        <tr>
-            <td style="border:none; padding: 4px 10px; font-weight:bold;">Run Status:</td>
-            <td style="border:none; padding: 4px 10px;">
-                <span class="badge ${experiment.runStatus == 'SUCCEEDED' ? 'badge-succeeded' : 'badge-failed'}">
+    <div class="page-header">
+        <div class="page-title-group">
+            <h1>Experiment Run #${experiment.id}: <c:out value="${experiment.algorithmName}"/></h1>
+            <p class="page-subtitle">Executed against Workload #${experiment.workloadId} &bull; <c:out value="${experiment.createdAt}"/></p>
+        </div>
+        <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/experiments" class="btn btn-secondary">&larr; Back to Experiments</a>
+            <a href="<%= request.getContextPath() %>/workloads/view?id=${experiment.workloadId}" class="btn btn-secondary">Source Workload</a>
+            <a href="<%= request.getContextPath() %>/experiments/export?id=${experiment.id}" class="btn btn-outline">Export Run CSV</a>
+        </div>
+    </div>
+
+    <!-- Run Summary Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Run Specification & Status</h2>
+            <div style="display: flex; gap: 8px;">
+                <span class="badge ${experiment.runStatus == 'SUCCEEDED' ? 'badge-success' : 'badge-danger'}">
                     <c:out value="${experiment.runStatus}"/>
                 </span>
-            </td>
-        </tr>
-        <tr>
-            <td style="border:none; padding: 4px 10px; font-weight:bold;">Validation:</td>
-            <td style="border:none; padding: 4px 10px;">
-                <span class="badge ${experiment.validationStatus == 'VALID' ? 'badge-valid' : (experiment.validationStatus == 'INVALID' ? 'badge-invalid' : 'badge-error')}">
+                <span class="badge ${experiment.validationStatus == 'VALID' ? 'badge-success' : 'badge-danger'}">
                     <c:out value="${experiment.validationStatus}"/>
                 </span>
-            </td>
-        </tr>
-        <tr><td style="border:none; padding: 4px 10px; font-weight:bold;">Executed At:</td><td style="border:none; padding: 4px 10px;"><c:out value="${experiment.createdAt}"/></td></tr>
-    </table>
+            </div>
+        </div>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <td style="width: 200px; font-weight: 600;">Algorithm:</td>
+                        <td><strong><c:out value="${experiment.algorithmName}"/></strong></td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Parameters:</td>
+                        <td><code><c:out value="${experiment.algorithmParameters}" default="None"/></code></td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Validation Invariants:</td>
+                        <td>
+                            <c:choose>
+                                <c:when test="${experiment.validationStatus == 'VALID'}">
+                                    <span style="color: var(--color-success); font-weight: 500;">Passed all ScheduleValidator CPU invariant checks (No overlaps, pre-arrival integrity verified).</span>
+                                </c:when>
+                                <c:otherwise>
+                                    <span style="color: var(--color-danger); font-weight: 500;">Failed invariant verification: <c:out value="${experiment.errorMessage}"/></span>
+                                </c:otherwise>
+                            </c:choose>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Execution Timestamp:</td>
+                        <td><c:out value="${experiment.createdAt}"/></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <c:if test="${not empty experiment.errorMessage}">
-        <p style="color:#c5221f; font-weight:bold; margin-top: 10px;">Error: <c:out value="${experiment.errorMessage}"/></p>
+        <div class="alert alert-danger">
+            <strong>Error Details:</strong> <c:out value="${experiment.errorMessage}"/>
+        </div>
     </c:if>
-    <div style="margin-top: 15px;">
-        <a class="btn" href="<%= request.getContextPath() %>/experiments/export?id=${experiment.id}">Export Run as CSV</a>
-    </div>
-</div>
 
-<c:if test="${experiment.runStatus == 'SUCCEEDED' && experiment.result != null}">
-    <h3>Aggregate Simulation Metrics</h3>
-    <div class="metric-grid">
-        <div class="metric-box">
-            <div class="metric-label">Avg Waiting Time</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageWaitingTime}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Avg Turnaround Time</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageTurnaroundTime}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Avg Response Time</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageResponseTime}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Context Switches</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.contextSwitchCount}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Total Duration</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.totalDuration}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Throughput</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.throughput}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">CPU Busy Time</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.cpuBusyTime}"/></div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">CPU Idle Time</div>
-            <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.cpuIdleTime}"/></div>
-        </div>
-    </div>
-
-    <h3>Gantt Chart & Execution Timeline</h3>
-    <c:if test="${experiment.result.aggregateMetrics.totalDuration > 0}">
-        <div class="timeline-bar-container">
-            <c:set var="colors" value="${['#1976d2', '#388e3c', '#f57c00', '#7b1fa2', '#c2185b', '#0097a7', '#5d4037', '#616161']}"/>
-            <c:forEach var="seg" items="${experiment.result.executionTimeline}" varStatus="loop">
-                <c:set var="segDuration" value="${seg.endTime - seg.startTime}"/>
-                <c:set var="pct" value="${(segDuration * 100.0) / experiment.result.aggregateMetrics.totalDuration}"/>
-                <c:set var="colorIdx" value="${loop.index % 8}"/>
-                <div class="timeline-block" 
-                     style="width: ${pct}%; background-color: ${seg.processId == 'IDLE' ? '#9e9e9e' : colors[colorIdx]};"
-                     title="<c:out value='${seg.processId}'/>: [${seg.startTime} - ${seg.endTime}] (${segDuration} time units)">
-                    <c:out value="${seg.processId}"/>
+    <c:if test="${experiment.runStatus == 'SUCCEEDED' && experiment.result != null}">
+        <!-- Aggregate Metrics Grid -->
+        <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--color-slate-900);">Simulated Aggregate Scheduling Metrics</h2>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Avg Waiting Time</span>
+                    <span class="badge badge-primary">Domain</span>
                 </div>
-            </c:forEach>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageWaitingTime}"/></div>
+                <div class="metric-subtext">Time spent in ready queue</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Avg Turnaround Time</span>
+                    <span class="badge badge-primary">Domain</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageTurnaroundTime}"/></div>
+                <div class="metric-subtext">Arrival to completion duration</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Avg Response Time</span>
+                    <span class="badge badge-primary">Domain</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageResponseTime}"/></div>
+                <div class="metric-subtext">Arrival to initial CPU acquisition</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Context Switches</span>
+                    <span class="badge badge-warning">Overhead</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.contextSwitchCount}"/></div>
+                <div class="metric-subtext">Process preemptions / handoffs</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Total Duration</span>
+                    <span class="badge badge-neutral">Timeline</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.totalDuration}"/></div>
+                <div class="metric-subtext">Simulated scheduling clock ticks</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Throughput</span>
+                    <span class="badge badge-success">Efficiency</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.throughput}"/></div>
+                <div class="metric-subtext">Completed processes per unit time</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">CPU Busy Time</span>
+                    <span class="badge badge-success">Active</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.cpuBusyTime}"/></div>
+                <div class="metric-subtext">Total active execution units</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">CPU Idle Time</span>
+                    <span class="badge badge-neutral">Idle</span>
+                </div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.cpuIdleTime}"/></div>
+                <div class="metric-subtext">Time units waiting for arrival</div>
+            </div>
+        </div>
+
+        <div class="alert alert-info" style="margin-bottom: 24px;">
+            <div>
+                <strong>Domain vs Execution Latency Distinction:</strong>
+                The numbers above reflect simulated operating system clock ticks according to the theoretical CPU scheduling model. They are strictly separate from host Java runtime nanoseconds/milliseconds measured by the execution engine.
+            </div>
+        </div>
+
+        <!-- Gantt Chart Section -->
+        <div class="gantt-wrapper">
+            <div class="card-header" style="border: none; padding: 0; margin-bottom: 16px;">
+                <div>
+                    <h2 class="card-title">Gantt Chart Execution Timeline</h2>
+                    <p class="card-description">Deterministic color-coded process allocation across simulated CPU timeline</p>
+                </div>
+            </div>
+
+            <c:if test="${experiment.result.aggregateMetrics.totalDuration > 0}">
+                <div class="gantt-scroll-container">
+                    <div class="gantt-bar-container">
+                        <c:set var="colors" value="${['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2', '#4b5563', '#ea580c']}"/>
+                        <c:forEach var="seg" items="${experiment.result.executionTimeline}" varStatus="loop">
+                            <c:set var="segDuration" value="${seg.endTime - seg.startTime}"/>
+                            <c:set var="pct" value="${(segDuration * 100.0) / experiment.result.aggregateMetrics.totalDuration}"/>
+                            <c:set var="colorIdx" value="${loop.index % 8}"/>
+                            <div class="gantt-block ${seg.processId == 'IDLE' ? 'idle' : ''}"
+                                 style="width: ${pct}%; <c:if test="${seg.processId != 'IDLE'}">background-color: ${colors[colorIdx]};</c:if>"
+                                 title="<c:out value='${seg.processId}'/>: [${seg.startTime} &rarr; ${seg.endTime}] (${segDuration} units)">
+                                <c:out value="${seg.processId}"/>
+                            </div>
+                        </c:forEach>
+                    </div>
+                    <div class="gantt-axis">
+                        <span>t = 0</span>
+                        <span>t = ${experiment.result.aggregateMetrics.totalDuration / 2}</span>
+                        <span>t = ${experiment.result.aggregateMetrics.totalDuration} (Total Duration)</span>
+                    </div>
+                </div>
+            </c:if>
+
+            <div class="gantt-legend">
+                <div class="gantt-legend-item">
+                    <div class="gantt-legend-color" style="background-color: var(--color-slate-400);"></div>
+                    <span>IDLE (CPU waiting for ready processes)</span>
+                </div>
+                <div class="gantt-legend-item">
+                    <div class="gantt-legend-color" style="background-color: #2563eb;"></div>
+                    <span>Active Process Segments</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabular Execution Segments Alternative (Accessibility) -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Execution Timeline Segments (Tabular Alternative)</h2>
+                    <p class="card-description">Screen-reader and tabular breakdown of consecutive schedule intervals</p>
+                </div>
+            </div>
+            <div class="table-responsive" style="margin: 0; box-shadow: none; border: none; max-height: 320px; overflow-y: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Sequence</th>
+                            <th>Process ID</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Segment Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <c:forEach var="seg" items="${experiment.result.executionTimeline}" varStatus="status">
+                        <tr>
+                            <td>${status.count}</td>
+                            <td>
+                                <strong><code><c:out value="${seg.processId}"/></code></strong>
+                            </td>
+                            <td>${seg.startTime}</td>
+                            <td>${seg.endTime}</td>
+                            <td>${seg.endTime - seg.startTime}</td>
+                        </tr>
+                    </c:forEach>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Per-Process Metrics Table -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Per-Process Performance Metrics</h2>
+                    <p class="card-description">Individual process turnaround, response, and waiting telemetry</p>
+                </div>
+            </div>
+            <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Process ID</th>
+                            <th>First Start</th>
+                            <th>Completion</th>
+                            <th>Waiting Time</th>
+                            <th>Turnaround Time</th>
+                            <th>Response Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <c:forEach var="pm" items="${experiment.result.processMetrics}">
+                        <tr>
+                            <td><strong><code><c:out value="${pm.processId}"/></code></strong></td>
+                            <td>${pm.firstStartTime}</td>
+                            <td>${pm.completionTime}</td>
+                            <td><strong>${pm.waitingTime}</strong></td>
+                            <td><strong>${pm.turnaroundTime}</strong></td>
+                            <td>${pm.responseTime}</td>
+                        </tr>
+                    </c:forEach>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </c:if>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Segment</th>
-                <th>Process ID</th>
-                <th>Start Time</th>
-                <th>End Time</th>
-                <th>Duration</th>
-            </tr>
-        </thead>
-        <tbody>
-        <c:forEach var="seg" items="${experiment.result.executionTimeline}" varStatus="status">
-            <tr>
-                <td>${status.count}</td>
-                <td><strong><c:out value="${seg.processId}"/></strong></td>
-                <td>${seg.startTime}</td>
-                <td>${seg.endTime}</td>
-                <td>${seg.endTime - seg.startTime}</td>
-            </tr>
-        </c:forEach>
-        </tbody>
-    </table>
-
-    <h3>Per-Process Metrics</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Process ID</th>
-                <th>First Start</th>
-                <th>Completion</th>
-                <th>Waiting Time</th>
-                <th>Turnaround Time</th>
-                <th>Response Time</th>
-            </tr>
-        </thead>
-        <tbody>
-        <c:forEach var="pm" items="${experiment.result.processMetrics}">
-            <tr>
-                <td><strong><c:out value="${pm.processId}"/></strong></td>
-                <td>${pm.firstStartTime}</td>
-                <td>${pm.completionTime}</td>
-                <td>${pm.waitingTime}</td>
-                <td>${pm.turnaroundTime}</td>
-                <td>${pm.responseTime}</td>
-            </tr>
-        </c:forEach>
-        </tbody>
-    </table>
-</c:if>
-
-<h3>Immutable Workload Input Snapshot</h3>
-<div class="note">
-    <strong>Immutable Snapshot:</strong> The table below reflects the exact process specifications captured at execution time. Even if the underlying workload is subsequently modified or deleted, this snapshot preserves historical scientific reproducibility.
+    <!-- Immutable Snapshot Table -->
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Immutable Workload Input Snapshot</h2>
+                <p class="card-description">Exact processes captured at simulation execution time to guarantee historical reproducibility</p>
+            </div>
+        </div>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Process ID</th>
+                        <th>Arrival Time</th>
+                        <th>Burst Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <c:forEach var="p" items="${experiment.snapshotProcesses}">
+                    <tr>
+                        <td><strong><code><c:out value="${p.processId}"/></code></strong></td>
+                        <td>${p.arrivalTime}</td>
+                        <td>${p.burstTime}</td>
+                    </tr>
+                </c:forEach>
+                <c:if test="${empty experiment.snapshotProcesses}">
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">No input snapshot processes recorded for this historical run.</td>
+                    </tr>
+                </c:if>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
-<table>
-    <thead>
-        <tr>
-            <th>Process ID</th>
-            <th>Arrival Time</th>
-            <th>Burst Time</th>
-        </tr>
-    </thead>
-    <tbody>
-    <c:forEach var="p" items="${experiment.snapshotProcesses}">
-        <tr>
-            <td><strong><c:out value="${p.processId}"/></strong></td>
-            <td>${p.arrivalTime}</td>
-            <td>${p.burstTime}</td>
-        </tr>
-    </c:forEach>
-    <c:if test="${empty experiment.snapshotProcesses}">
-        <tr>
-            <td colspan="3" style="text-align:center; color: #888;">No snapshot data recorded for this run.</td>
-        </tr>
-    </c:if>
-    </tbody>
-</table>
 
+<script src="<%= request.getContextPath() %>/assets/js/app.js"></script>
 </body>
 </html>

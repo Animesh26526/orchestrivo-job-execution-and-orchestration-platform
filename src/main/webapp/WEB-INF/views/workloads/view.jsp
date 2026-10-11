@@ -1,73 +1,151 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workload: <c:out value="${workload.name}"/> - Orchestrivo</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; line-height: 1.5; }
-        table { border-collapse: collapse; margin-top: 10px; width: 60%; }
-        th, td { border: 1px solid #ddd; padding: 6px 12px; text-align: left; }
-        th { background: #f4f4f4; }
-        .box { background: #f9f9f9; border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; width: 60%; }
-    </style>
+    <link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/app.css">
 </head>
 <body>
-<h2>Workload: <c:out value="${workload.name}"/></h2>
-<p>
-    <a href="<%= request.getContextPath() %>/workloads">Back to Workloads</a> | 
-    <a href="<%= request.getContextPath() %>/workloads/edit?id=${workload.id}">Edit Workload</a> | 
-    <a href="<%= request.getContextPath() %>/workloads/export?id=${workload.id}">Export CSV</a>
-</p>
 
-<p><strong>Description:</strong> <c:out value="${workload.description}"/></p>
-<p><strong>Source Type:</strong> <c:out value="${workload.sourceType}"/> 
-    <c:if test="${not empty workload.generationSeed}">(Seed: ${workload.generationSeed})</c:if>
-</p>
-<p><strong>Created:</strong> <c:out value="${workload.createdAt}"/></p>
+<jsp:include page="/WEB-INF/views/layout/navbar.jsp"/>
 
-<h3>Process List (${workload.workload != null ? workload.workload.processes.size() : 0} processes)</h3>
-<table>
-    <thead>
-        <tr>
-            <th>Process ID</th>
-            <th>Arrival Time</th>
-            <th>Burst Time</th>
-        </tr>
-    </thead>
-    <tbody>
-    <c:forEach var="p" items="${workload.workload.processes}">
-        <tr>
-            <td><strong><c:out value="${p.processId}"/></strong></td>
-            <td>${p.arrivalTime}</td>
-            <td>${p.burstTime}</td>
-        </tr>
-    </c:forEach>
-    </tbody>
-</table>
+<div class="app-container">
+    <div class="breadcrumb-bar">
+        <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="<%= request.getContextPath() %>/workloads">Workloads</a>
+        <span class="breadcrumb-separator">/</span>
+        <span>Workload #${workload.id}</span>
+    </div>
 
-<div class="box">
-    <h3>Run Scheduling Experiment</h3>
-    <form action="<%= request.getContextPath() %>/experiments/run" method="post">
-        <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>
-        <input type="hidden" name="workloadId" value="${workload.id}"/>
-        
-        <label>Algorithm: 
-            <select name="algorithmName">
-                <option value="FCFS">First-Come, First-Served (FCFS)</option>
-                <option value="SJF">Shortest Job First (SJF - Non-preemptive)</option>
-                <option value="SRTF">Shortest Remaining Time First (SRTF - Preemptive)</option>
-                <option value="ROUND_ROBIN">Round Robin (RR)</option>
-            </select>
-        </label><br/><br/>
-        
-        <label>Time Quantum (for Round Robin): 
-            <input type="number" name="quantum" value="3" min="1"/>
-        </label><br/><br/>
-        
-        <button type="submit">Run Simulation</button>
-    </form>
+    <div class="page-header">
+        <div class="page-title-group">
+            <h1>Workload: <c:out value="${workload.name}"/></h1>
+            <p class="page-subtitle"><c:out value="${workload.description}"/></p>
+        </div>
+        <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/workloads" class="btn btn-secondary">&larr; Back to Workloads</a>
+            <a href="<%= request.getContextPath() %>/workloads/edit?id=${workload.id}" class="btn btn-secondary">Edit Workload</a>
+            <a href="<%= request.getContextPath() %>/workloads/export?id=${workload.id}" class="btn btn-outline">Export CSV</a>
+        </div>
+    </div>
+
+    <!-- Metadata Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Specification Summary</h2>
+            <span class="badge ${workload.sourceType == 'GENERATED' ? 'badge-info' : (workload.sourceType == 'CSV_IMPORT' ? 'badge-warning' : 'badge-neutral')}">
+                <c:out value="${workload.sourceType}"/>
+            </span>
+        </div>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <td style="width: 200px; font-weight: 600;">Workload ID:</td>
+                        <td>#${workload.id}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Description:</td>
+                        <td><c:out value="${workload.description}"/></td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Source Type:</td>
+                        <td>
+                            <c:out value="${workload.sourceType}"/>
+                            <c:if test="${not empty workload.generationSeed}">
+                                &bull; Deterministic Seed: <code>${workload.generationSeed}</code>
+                            </c:if>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Created Timestamp:</td>
+                        <td><c:out value="${workload.createdAt}"/></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="form-grid-2">
+        <!-- Process Table -->
+        <div class="card" style="margin-bottom: 0;">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Process Specifications</h2>
+                    <p class="card-description">
+                        <c:out value="${workload.workload != null ? workload.workload.processes.size() : 0}"/> active processes
+                    </p>
+                </div>
+            </div>
+            <div class="table-responsive" style="margin: 0; box-shadow: none; border: none; max-height: 400px; overflow-y: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Process ID</th>
+                            <th>Arrival Time</th>
+                            <th>Burst Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <c:forEach var="p" items="${workload.workload.processes}">
+                        <tr>
+                            <td><strong><code><c:out value="${p.processId}"/></code></strong></td>
+                            <td>${p.arrivalTime}</td>
+                            <td>${p.burstTime}</td>
+                        </tr>
+                    </c:forEach>
+                    <c:if test="${empty workload.workload.processes}">
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">No processes found in this workload.</td>
+                        </tr>
+                    </c:if>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Launch Simulation Card -->
+        <div class="card" style="margin-bottom: 0;">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Run Scheduling Experiment</h2>
+                    <p class="card-description">Select algorithm to dispatch background execution worker</p>
+                </div>
+            </div>
+            <form action="<%= request.getContextPath() %>/experiments/run" method="post">
+                <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>
+                <input type="hidden" name="workloadId" value="${workload.id}"/>
+
+                <div class="form-group">
+                    <label class="form-label" for="algorithmName">Scheduling Algorithm:</label>
+                    <select id="algorithmName" name="algorithmName" class="form-select" required>
+                        <option value="FCFS">First-Come, First-Served (FCFS)</option>
+                        <option value="SJF">Shortest Job First (SJF - Non-preemptive)</option>
+                        <option value="SRTF">Shortest Remaining Time First (SRTF - Preemptive)</option>
+                        <option value="ROUND_ROBIN">Round Robin (RR)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="quantumGroup" style="display: none;">
+                    <label class="form-label" for="quantumInput">Time Quantum (for Round Robin):</label>
+                    <input type="number" id="quantumInput" name="quantum" class="form-input" value="3" min="1" max="100"/>
+                    <div class="form-hint">Time slice allocated to each process per round</div>
+                </div>
+
+                <div style="margin-top: 24px;">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        Dispatch Experiment to Engine &rarr;
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
+<script src="<%= request.getContextPath() %>/assets/js/app.js"></script>
 </body>
 </html>

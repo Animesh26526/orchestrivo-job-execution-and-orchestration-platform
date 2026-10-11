@@ -1,39 +1,36 @@
 # Orchestrivo
 
-Orchestrivo is a Java-based CPU scheduling simulation, experiment management, and benchmarking platform. In Stage 3, it has evolved into a comprehensive experimental platform featuring workload lifecycle management, reproducible pseudo-random workload generation, RFC-compliant CSV workflows, multi-algorithm side-by-side comparison, immutable input snapshots, and wall-clock execution micro-benchmarking.
+Orchestrivo is a Java-based CPU scheduling simulation, experiment management, and benchmarking platform. In Stage 4, Orchestrivo has evolved with a **complete UI modernization** across every application view, **hardened concurrency & reliability engineering**, a **persistent MySQL-backed background execution engine** with worker pool lifecycle management, and **full queue observability**.
 
 ---
 
-## Stage 3 Capabilities
+## Stage 4 Capabilities
 
-Orchestrivo runs on a verified Java 17 + Jakarta Servlet 6.0 + JSP + JDBC + MySQL 8 foundation deployed as a WAR on Apache Tomcat 10.1+.
+Orchestrivo runs on a verified Java 17 + Jakarta Servlet 6.0 + JSP 3.1 + JDBC + MySQL 8 foundation deployed as a WAR on Apache Tomcat 10.1+.
 
-### 1. Workload Lifecycle Management
-- **Manual Creation & Editing**: Create, inspect, edit metadata, and modify process specifications with transactional consistency.
-- **Workload Duplication**: Clone existing workloads to isolate parameter variations without mutating baseline data.
-- **Search, Filtering, & Allowlisted Sorting**: Server-side query filtering with bounded pagination (`10, 25, 50` items/page) and parameterized SQL queries preventing SQL injection.
+### 1. Complete UI Modernization (Workstream A)
+- **Shared Design System**: Polished visual language (`assets/css/app.css`, `assets/js/app.js`) featuring clean typography, consistent color tokens, metric cards, status badges, and responsive navigation shells.
+- **Interactive & Accessible Gantt Timeline**: Rich visual execution timeline with color-coded process blocks, idle CPU representations, time axis ticks, and a screen-reader friendly tabular alternative for full accessibility.
+- **Benchmark Visualizations**: Inline SVG charts rendering per-iteration execution latency distributions without external frontend framework bloat.
+- **Telemetry Distinction**: Clear visual separation between theoretical CPU scheduling metrics (clock ticks) and actual host engine execution durations (wall-clock milliseconds/nanoseconds).
 
-### 2. CSV Data Workflows & Reproducible Generation
-- **RFC-Compliant CSV Import**: Supports file upload (`multipart/form-data`) and direct text pasting. Row-level validation enforces positive bursts, non-negative arrivals, unique process IDs, and a 500-process safety ceiling.
-- **Deterministic Workload Generation**: Generates synthetic workloads using a seeded pseudo-random generator (`java.util.Random(seed)`), enabling identical reconstruction across test environments.
-- **Hardened CSV Export**: Neutralizes spreadsheet formula injection (CWE-1236) by automatically prefixing dangerous trigger characters (`=`, `+`, `-`, `@`, `\t`, `\r`) with a single quote (`'`).
+### 2. Persistent Background Execution Engine (Workstream C)
+- **MySQL-Backed Job Queue**: Schema migration `V3__execution_jobs.sql` introduces persistent job records tracking statuses (`QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`).
+- **Autonomous Worker Engine**: `ExecutionWorkerManager` orchestrates a bounded daemon thread pool that polls the job queue, executes simulations asynchronously, validates CPU invariants, and records completed runs.
+- **Lifecycle Integration**: Managed via `AppConfigListener` for clean startup and graceful shutdown during Tomcat context destruction.
+- **Asynchronous & Synchronous Execution**: Experiments run asynchronously by default with automatic background dispatch and polling (`/jobs/status`), with synchronous mode supported via `?mode=sync`.
 
-### 3. Experiment Management & Side-by-Side Comparison
-- **Immutable Input Snapshots**: Captures an exact JSON snapshot of the input processes at execution time (`experiment_runs.input_snapshot`). Retains historical integrity and mathematical reproducibility even if the source workload is modified or deleted.
-- **Controlled Multi-Algorithm Comparison**: Compares up to 10 experiment runs side-by-side. Validates workload compatibility by verifying snapshot equality, presents metric winner highlights, and exports comparison reports to CSV.
-- **Independent Schedule Validation**: Verifies that every generated execution timeline adheres strictly to CPU scheduling invariants (no overlaps, total CPU burst match, no pre-arrival execution).
+### 3. Reliability & Concurrency Engineering (Workstream B)
+- **Atomic Job Claiming**: Multi-worker concurrency safety utilizing atomic SQL transitions (`UPDATE execution_jobs SET status='RUNNING', claimed_by=?, claimed_at=NOW() WHERE id=? AND status='QUEUED'`).
+- **Idempotency Deduplication**: Client-provided idempotency keys prevent duplicate job enqueueing under retries or network replays.
+- **Safe Retries & Attempt Caps**: Failed jobs support retries up to `max_attempts` with error message tracking and manual retry actions.
+- **Stale Lease Recovery**: Automatic detection and recovery of stalled jobs from crashed or unresponsive workers.
+- **Double-Submit Prevention**: Client-side form protection and transaction boundaries preventing accidental duplicate submissions.
+- **Resource Ownership Enforcement**: Strict tenant isolation across all job operations (`cancel`, `retry`, `view`, `status`).
 
-### 4. Implementation Micro-Benchmarking
-- **Engine Execution Latency Measurement**: Measures wall-clock algorithm execution using `System.nanoTime()`.
-- **JIT Warm-Up Protocol**: Runs untimed initial iterations to prime the HotSpot JIT compiler before recording measured iterations.
-- **Statistical Summaries**: Calculates median, minimum, maximum, and sample standard deviation in microseconds (µs) and milliseconds (ms).
-- **Metric Domain Separation**: Strictly separates host engine execution latency from simulated domain metrics (e.g., turnaround time, waiting time).
-- **Continuous Invariant Verification**: Validates the schedule output on every single benchmark repetition.
-- **Host Runtime Metadata**: Automatically captures JVM version, vendor, OS name, architecture, and available processor cores.
-
-### 5. Operational Audit Logging
-- **Non-Blocking Audit Trail**: Asynchronously logs key operational events (`AUTH_LOGIN`, `AUTH_LOGOUT`, `AUTH_REGISTER`, `WORKLOAD_CREATE`, `WORKLOAD_UPDATE`, `WORKLOAD_DUPLICATE`, `WORKLOAD_DELETE`, `CSV_IMPORT`, `CSV_EXPORT`, `BENCHMARK_RUN`, `BENCHMARK_DELETE`).
-- **Secret Redaction**: Automatically scrubs passwords, session identifiers, and CSRF tokens from audit payloads prior to persistence.
+### 4. Queue Observability & Dashboard Telemetry (Workstream D)
+- **Live Metrics**: Dashboard and Queue management pages display live queue counters (Queued, Running, Completed, Failed), average queue wait times, and engine compute latencies.
+- **Audit Integration**: Full operational trail tracking job dispatch, cancellation, retries, and completions.
 
 ---
 
@@ -82,6 +79,7 @@ src/
    ```bash
    mysql -u root -p orchestrivo < src/main/resources/db/V1__init_schema.sql
    mysql -u root -p orchestrivo < src/main/resources/db/V2__stage3_features.sql
+   mysql -u root -p orchestrivo < src/main/resources/db/V3__execution_jobs.sql
    ```
 3. Grant permissions to dedicated application user `orchestrivo_user`:
    ```sql
@@ -109,7 +107,7 @@ The resulting `target/orchestrivo.war` artifact will be generated.
 
 ## Verification & Testing
 
-Execute the complete automated test suite (89 tests):
+Execute the complete automated test suite (110 tests):
 ```powershell
 $env:JDBC_URL = [System.Environment]::GetEnvironmentVariable('JDBC_URL', 'User')
 $env:JDBC_USER = [System.Environment]::GetEnvironmentVariable('JDBC_USER', 'User')
@@ -119,8 +117,9 @@ $env:JDBC_PASSWORD = [System.Environment]::GetEnvironmentVariable('JDBC_PASSWORD
 
 ### Test Coverage Highlights:
 - **Unit Tests**: CSV parser RFC-compliance, formula injection mitigation, deterministic generator reproducibility, benchmark statistics (median, std dev), comparison logic.
-- **Persistence Tests**: MySQL JDBC repositories for Users, Workloads, Experiment Runs, Benchmark Runs & Measurements, Audit Logs.
-- **Security Tests**: Session ID rotation on auth, CSRF rejection on all state-changing endpoints, resource ownership isolation, JSP XSS output escaping (`<c:out>`).
+- **Persistence Tests**: MySQL JDBC repositories for Users, Workloads, Experiment Runs, Benchmark Runs & Measurements, Audit Logs, and Execution Jobs (atomic claiming with 10 concurrent threads, state transitions, idempotency deduplication, stale lease recovery).
+- **Service & Engine Tests**: ExecutionWorkerManager lifecycle, asynchronous execution of FCFS and Round Robin, permanent invalid snapshot failure handling, schedule invariant verification.
+- **Security Tests**: Session ID rotation on auth, CSRF rejection on all state-changing endpoints (including job cancellation and retries), resource ownership isolation, JSP XSS output escaping (`<c:out>`).
 
 ---
 

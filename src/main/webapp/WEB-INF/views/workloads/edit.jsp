@@ -1,86 +1,100 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Edit Workload - Orchestrivo</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; line-height: 1.5; }
-        .error { color: #d9534f; background: #fdf7f7; border: 1px solid #eed3d7; padding: 10px; margin-bottom: 15px; }
-        table { border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
-        th { background: #eee; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Workload: <c:out value="${workload.name}"/> - Orchestrivo</title>
+    <link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/app.css">
 </head>
 <body>
-<h2>Edit Workload: <c:out value="${workload.name}"/></h2>
-<p><a href="<%= request.getContextPath() %>/workloads/view?id=${workload.id}">Cancel & View</a> | <a href="<%= request.getContextPath() %>/workloads">Back to List</a></p>
 
-<c:if test="${not empty error}">
-    <div class="error"><c:out value="${error}"/></div>
-</c:if>
+<jsp:include page="/WEB-INF/views/layout/navbar.jsp"/>
 
-<form action="<%= request.getContextPath() %>/workloads/edit" method="post">
-    <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>
-    <input type="hidden" name="id" value="${workload.id}"/>
+<div class="app-container">
+    <div class="breadcrumb-bar">
+        <a href="<%= request.getContextPath() %>/dashboard">Dashboard</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="<%= request.getContextPath() %>/workloads">Workloads</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="<%= request.getContextPath() %>/workloads/view?id=${workload.id}">Workload #${workload.id}</a>
+        <span class="breadcrumb-separator">/</span>
+        <span>Edit</span>
+    </div>
 
-    <label>Workload Name: <br/>
-        <input type="text" name="name" value="<c:out value='${workload.name}'/>" required size="50"/>
-    </label><br/><br/>
+    <div class="page-header">
+        <div class="page-title-group">
+            <h1>Edit Workload: <c:out value="${workload.name}"/></h1>
+            <p class="page-subtitle">Update metadata and modify process specifications</p>
+        </div>
+        <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/workloads/view?id=${workload.id}" class="btn btn-secondary">&larr; Cancel & View</a>
+        </div>
+    </div>
 
-    <label>Description: <br/>
-        <textarea name="description" rows="3" cols="60"><c:out value="${workload.description}"/></textarea>
-    </label><br/><br/>
+    <c:if test="${not empty error}">
+        <div class="alert alert-danger">
+            <c:out value="${error}"/>
+        </div>
+    </c:if>
 
-    <h3>Processes</h3>
-    <p><small>Arrival times must be &ge; 0. Burst times must be &gt; 0. Process IDs must be unique.</small></p>
+    <div class="card" style="max-width: 800px;">
+        <form action="<%= request.getContextPath() %>/workloads/edit" method="post">
+            <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>
+            <input type="hidden" name="id" value="${workload.id}"/>
 
-    <table id="processTable">
-        <thead>
-            <tr>
-                <th>Process ID</th>
-                <th>Arrival Time</th>
-                <th>Burst Time</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-        <c:forEach var="p" items="${workload.workload.processes}">
-            <tr>
-                <td><input type="text" name="processId" value="<c:out value='${p.processId}'/>" required size="10"/></td>
-                <td><input type="number" name="arrivalTime" value="${p.arrivalTime}" min="0" required size="10"/></td>
-                <td><input type="number" name="burstTime" value="${p.burstTime}" min="1" required size="10"/></td>
-                <td><button type="button" onclick="removeRow(this)">Remove</button></td>
-            </tr>
-        </c:forEach>
-        </tbody>
-    </table>
+            <div class="form-group">
+                <label class="form-label" for="editName">Workload Name</label>
+                <input type="text" id="editName" name="name" class="form-input" value="<c:out value='${workload.name}'/>" required>
+            </div>
 
-    <br/>
-    <button type="button" onclick="addRow()">+ Add Process</button>
-    <br/><br/>
-    <button type="submit">Save Changes</button>
-</form>
+            <div class="form-group">
+                <label class="form-label" for="editDesc">Description</label>
+                <textarea id="editDesc" name="description" class="form-textarea" rows="2"><c:out value="${workload.description}"/></textarea>
+            </div>
 
-<script>
-let counter = ${workload.workload != null ? workload.workload.processes.size() + 1 : 1};
-function addRow() {
-    const table = document.getElementById('processTable').getElementsByTagName('tbody')[0];
-    const newRow = table.insertRow();
-    newRow.innerHTML = '<td><input type="text" name="processId" value="P' + (counter++) + '" required size="10"/></td>' +
-                      '<td><input type="number" name="arrivalTime" value="0" min="0" required size="10"/></td>' +
-                      '<td><input type="number" name="burstTime" value="5" min="1" required size="10"/></td>' +
-                      '<td><button type="button" onclick="removeRow(this)">Remove</button></td>';
-}
-function removeRow(btn) {
-    const row = btn.parentNode.parentNode;
-    if (row.parentNode.rows.length > 1) {
-        row.parentNode.removeChild(row);
-    } else {
-        alert("A workload must contain at least one process.");
-    }
-}
-</script>
+            <div class="card-header" style="margin-top: 24px; padding-bottom: 10px;">
+                <div>
+                    <h2 class="card-title">Process Specifications</h2>
+                    <p class="card-description">Arrival times must be &ge; 0. Burst times must be &gt; 0. Process IDs must be unique.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="addProcessRow('processTable', 'P')">+ Add Process Row</button>
+            </div>
 
+            <div class="table-responsive" style="box-shadow: none; border: 1px solid var(--color-slate-200); margin-bottom: 16px;">
+                <table class="data-table" id="processTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 28%;">Process ID</th>
+                            <th style="width: 28%;">Arrival Time</th>
+                            <th style="width: 28%;">Burst Time</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <c:forEach var="p" items="${workload.workload.processes}">
+                        <tr>
+                            <td><input type="text" name="processId" class="form-input" value="<c:out value='${p.processId}'/>" required style="font-family: monospace; font-weight: 600;" /></td>
+                            <td><input type="number" name="arrivalTime" class="form-input" value="${p.arrivalTime}" min="0" required /></td>
+                            <td><input type="number" name="burstTime" class="form-input" value="${p.burstTime}" min="1" required /></td>
+                            <td class="actions-cell">
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeProcessRow(this)">Remove</button>
+                            </td>
+                        </tr>
+                    </c:forEach>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <a href="<%= request.getContextPath() %>/workloads/view?id=${workload.id}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="<%= request.getContextPath() %>/assets/js/app.js"></script>
 </body>
 </html>
