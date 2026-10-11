@@ -14,20 +14,21 @@ public class DataSourceManager {
     public static synchronized DataSource getDataSource() {
         if (dataSource == null) {
             HikariConfig config = new HikariConfig();
+            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             
-            String url = System.getenv("JDBC_URL");
+            String url = getEnvOrProperty("JDBC_URL");
             if (url == null || url.trim().isEmpty()) {
                 throw new IllegalStateException("JDBC_URL environment variable is required.");
             }
             config.setJdbcUrl(url);
 
-            String user = System.getenv("JDBC_USER");
+            String user = getEnvOrProperty("JDBC_USER");
             if (user == null || user.trim().isEmpty()) {
                 throw new IllegalStateException("JDBC_USER environment variable is required. (Do not use root in production)");
             }
             config.setUsername(user);
 
-            String password = System.getenv("JDBC_PASSWORD");
+            String password = getEnvOrProperty("JDBC_PASSWORD");
             if (password == null || password.trim().isEmpty()) {
                 throw new IllegalStateException("JDBC_PASSWORD environment variable is required.");
             }
@@ -49,5 +50,17 @@ public class DataSourceManager {
             dataSource.close();
             dataSource = null;
         }
+    }
+
+    private static String getEnvOrProperty(String key) {
+        String val = System.getenv(key);
+        if (val != null && !val.trim().isEmpty()) {
+            return val.trim();
+        }
+        val = System.getProperty(key);
+        if (val != null && !val.trim().isEmpty()) {
+            return val.trim();
+        }
+        return null;
     }
 }

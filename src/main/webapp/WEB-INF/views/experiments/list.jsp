@@ -9,7 +9,7 @@
 <c:forEach var="e" items="${experiments}">
     <li>
         <a href="<%= request.getContextPath() %>/experiments/view?id=${e.id}">
-            Run ${e.id} - ${e.algorithmName} (<c:out value="${e.runStatus}"/>)
+            Run ${e.id} - <c:out value="${e.algorithmName}"/> (<c:out value="${e.runStatus}"/>)
         </a>
     </li>
 </c:forEach>

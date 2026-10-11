@@ -60,5 +60,8 @@ class WorkloadServiceTest {
         // Owner can delete
         workloadService.deleteWorkload(wr.getId(), u1.getId());
         assertFalse(workloadService.getWorkloadById(wr.getId(), u1.getId()).isPresent());
+
+        // Deleting nonexistent workload throws IllegalArgumentException
+        assertThrows(IllegalArgumentException.class, () -> workloadService.deleteWorkload(wr.getId(), u1.getId()));
     }
 }

@@ -69,8 +69,10 @@ public class WorkloadServlet extends HttpServlet {
                 long id = Long.parseLong(req.getParameter("id"));
                 ServiceRegistry.workloadService.deleteWorkload(id, user.getId());
                 resp.sendRedirect(req.getContextPath() + "/workloads");
+            } catch (NumberFormatException e) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid workload ID");
             } catch (IllegalArgumentException e) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+                resp.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
             } catch (SecurityException e) {
                 resp.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
             }

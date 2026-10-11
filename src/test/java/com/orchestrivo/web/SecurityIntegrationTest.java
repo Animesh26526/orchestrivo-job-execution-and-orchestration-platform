@@ -214,12 +214,114 @@ public class SecurityIntegrationTest {
         when(request.getServletPath()).thenReturn("/workloads/delete");
         when(request.getParameter("id")).thenReturn("10");
         
-        // Simulating the case where delete throws IllegalArgumentException because the workload is not owned
-        doThrow(new IllegalArgumentException("Workload not found or unauthorized")).when(workloadService).deleteWorkload(10L, 1L);
+        // Simulating the case where delete throws SecurityException because the workload is owned by another user
+        doThrow(new SecurityException("Unauthorized to delete workload.")).when(workloadService).deleteWorkload(10L, 1L);
 
         servlet.doPost(request, response);
 
-        verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Workload not found or unauthorized");
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Unauthorized to delete workload.");
+    }
+
+    @Test
+    void testWorkloadDeletionForNonexistentResource() throws ServletException, IOException {
+        WorkloadService workloadService = mock(WorkloadService.class);
+        ServiceRegistry.workloadService = workloadService;
+        
+        WorkloadServlet servlet = new WorkloadServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        
+        when(request.getServletPath()).thenReturn("/workloads/delete");
+        when(request.getParameter("id")).thenReturn("99");
+        
+        // Simulating the case where delete throws IllegalArgumentException because the workload does not exist
+        doThrow(new IllegalArgumentException("Workload not found.")).when(workloadService).deleteWorkload(99L, 1L);
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_NOT_FOUND, "Workload not found.");
+    }
+
+    @Test
+    void testMalformedIdOnWorkloadDelete() throws ServletException, IOException {
+        WorkloadServlet servlet = new WorkloadServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        
+        when(request.getServletPath()).thenReturn("/workloads/delete");
+        when(request.getParameter("id")).thenReturn("not-a-number");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid workload ID");
+    }
+
+    @Test
+    void testMalformedIdOnExperimentView() throws ServletException, IOException {
+        ExperimentServlet servlet = new ExperimentServlet();
+        User sessionUser = new User();
+        sessionUser.setId(1L);
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        
+        when(request.getServletPath()).thenReturn("/experiments/view");
+        when(request.getParameter("id")).thenReturn("invalid-id");
+
+        servlet.doGet(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid experiment ID");
+    }
+
+    @Test
+    void testUnauthenticatedAccessRedirectsToLogin() throws ServletException, IOException {
+        AuthFilter filter = new AuthFilter();
+        
+        when(request.getRequestURI()).thenReturn("/workloads");
+        when(request.getContextPath()).thenReturn("");
+        when(request.getMethod()).thenReturn("GET");
+        when(session.getAttribute("user")).thenReturn(null);
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(response).sendRedirect("/login");
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    void testCsrfPermitsValidToken() throws ServletException, IOException {
+        AuthFilter filter = new AuthFilter();
+        
+        when(request.getRequestURI()).thenReturn("/workloads/new");
+        when(request.getContextPath()).thenReturn("");
+        when(request.getMethod()).thenReturn("POST");
+        User sessionUser = new User();
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        when(session.getAttribute("csrfToken")).thenReturn("valid-token");
+        when(request.getParameter("csrfToken")).thenReturn("valid-token");
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).sendError(anyInt(), anyString());
+    }
+
+    @Test
+    void testCsrfRejectionOnLogout() throws ServletException, IOException {
+        AuthFilter filter = new AuthFilter();
+        
+        when(request.getRequestURI()).thenReturn("/logout");
+        when(request.getContextPath()).thenReturn("");
+        when(request.getMethod()).thenReturn("POST");
+        User sessionUser = new User();
+        when(session.getAttribute("user")).thenReturn(sessionUser);
+        when(session.getAttribute("csrfToken")).thenReturn("valid-token");
+        when(request.getParameter("csrfToken")).thenReturn("wrong-token");
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or missing CSRF Token");
+        verify(filterChain, never()).doFilter(request, response);
     }
 
     @Test
@@ -265,6 +367,8 @@ public class SecurityIntegrationTest {
         // We check workload list and view jsp for c:out usage wrapping specific user-controlled fields.
         Path listJsp = viewsPath.resolve("workloads/list.jsp");
         Path viewJsp = viewsPath.resolve("workloads/view.jsp");
+        Path expListJsp = viewsPath.resolve("experiments/list.jsp");
+        Path expViewJsp = viewsPath.resolve("experiments/view.jsp");
 
         if (Files.exists(listJsp)) {
             String listContent = Files.readString(listJsp);
@@ -275,6 +379,19 @@ public class SecurityIntegrationTest {
             String viewContent = Files.readString(viewJsp);
             assertTrue(viewContent.contains("<c:out value=\"${workload.name}\"/>"), "View JSP should escape workload name");
             assertTrue(viewContent.contains("<c:out value=\"${workload.description}\"/>"), "View JSP should escape workload description");
+        }
+
+        if (Files.exists(expListJsp)) {
+            String expListContent = Files.readString(expListJsp);
+            assertTrue(expListContent.contains("<c:out value=\"${e.algorithmName}\"/>"), "Experiments list should escape algorithm name");
+            assertTrue(expListContent.contains("<c:out value=\"${e.runStatus}\"/>"), "Experiments list should escape run status");
+        }
+
+        if (Files.exists(expViewJsp)) {
+            String expViewContent = Files.readString(expViewJsp);
+            assertTrue(expViewContent.contains("<c:out value=\"${experiment.algorithmName}\"/>"), "Experiments view should escape algorithm name");
+            assertTrue(expViewContent.contains("<c:out value=\"${experiment.runStatus}\"/>"), "Experiments view should escape run status");
+            assertTrue(expViewContent.contains("<c:out value=\"${seg.processId}\"/>"), "Experiments view should escape process ID");
         }
     }
 }
