@@ -41,7 +41,10 @@ public class WorkloadService {
     
     public void deleteWorkload(long workloadId, long userId) {
         Optional<WorkloadRecord> opt = workloadRepository.findById(workloadId);
-        if (opt.isPresent() && opt.get().getOwnerUserId() == userId) {
+        if (opt.isPresent()) {
+            if (opt.get().getOwnerUserId() != userId) {
+                throw new SecurityException("Unauthorized to delete workload.");
+            }
             workloadRepository.deleteById(workloadId);
         } else {
             throw new IllegalArgumentException("Workload not found.");

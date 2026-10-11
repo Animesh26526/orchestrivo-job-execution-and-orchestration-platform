@@ -41,3 +41,7 @@ target/
 # Temp files
 *.tmp
 *.bak
+
+# Documentation
+docs/
+

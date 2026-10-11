@@ -71,6 +71,8 @@ public class WorkloadServlet extends HttpServlet {
                 resp.sendRedirect(req.getContextPath() + "/workloads");
             } catch (IllegalArgumentException e) {
                 resp.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+            } catch (SecurityException e) {
+                resp.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
             }
         }
     }
