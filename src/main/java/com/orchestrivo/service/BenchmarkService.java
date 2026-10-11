@@ -15,16 +15,22 @@ import java.util.*;
 
 public class BenchmarkService {
 
-    public static final int MIN_PROCESS_COUNT = 5;
+    public static final int MIN_PROCESS_COUNT = 1;
     public static final int MAX_PROCESS_COUNT = 500;
     public static final int MIN_WARMUP = 1;
-    public static final int MAX_WARMUP = 20;
-    public static final int MIN_REPETITIONS = 3;
-    public static final int MAX_REPETITIONS = 100;
+    public static final int MAX_WARMUP = 100;
+    public static final int MIN_REPETITIONS = 1;
+    public static final int MAX_REPETITIONS = 1000;
+    public static final int MIN_QUANTUM = 1;
+    public static final int MAX_QUANTUM = 100;
 
     private final BenchmarkRepository benchmarkRepository;
     private final ScheduleValidator validator;
     private final SchedulingStrategyFactory strategyFactory;
+
+    public BenchmarkService() {
+        this(null);
+    }
 
     public BenchmarkService(BenchmarkRepository benchmarkRepository) {
         this.benchmarkRepository = benchmarkRepository;
@@ -73,8 +79,9 @@ public class BenchmarkService {
         if (config.getAlgorithmName() == null || config.getAlgorithmName().trim().isEmpty()) {
             throw new IllegalArgumentException("Algorithm name is required.");
         }
+        AlgorithmType type;
         try {
-            AlgorithmType.valueOf(config.getAlgorithmName().trim().toUpperCase());
+            type = AlgorithmType.valueOf(config.getAlgorithmName().trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unsupported algorithm: " + config.getAlgorithmName());
         }
@@ -87,15 +94,39 @@ public class BenchmarkService {
         if (config.getMeasuredIterations() < MIN_REPETITIONS || config.getMeasuredIterations() > MAX_REPETITIONS) {
             throw new IllegalArgumentException("Measured iterations must be between " + MIN_REPETITIONS + " and " + MAX_REPETITIONS + ".");
         }
-        if (config.getMinArrival() < 0 || config.getMaxArrival() < config.getMinArrival()) {
-            throw new IllegalArgumentException("Invalid arrival time range.");
+        if (config.getMinArrival() < 0) {
+            throw new IllegalArgumentException("Minimum arrival time cannot be negative.");
         }
-        if (config.getMinBurst() <= 0 || config.getMaxBurst() < config.getMinBurst()) {
-            throw new IllegalArgumentException("Invalid burst time range.");
+        if (config.getMaxArrival() < config.getMinArrival()) {
+            throw new IllegalArgumentException("Maximum arrival time must be greater than or equal to minimum arrival time.");
         }
-        if (config.getQuantum() <= 0) {
-            config.setQuantum(3);
+        if (config.getMinBurst() < 1) {
+            throw new IllegalArgumentException("Minimum burst time must be strictly positive (at least 1).");
         }
+        if (config.getMaxBurst() < config.getMinBurst()) {
+            throw new IllegalArgumentException("Maximum burst time must be greater than or equal to minimum burst time.");
+        }
+        if (type == AlgorithmType.ROUND_ROBIN && (config.getQuantum() < MIN_QUANTUM || config.getQuantum() > MAX_QUANTUM)) {
+            throw new IllegalArgumentException("Time quantum must be between " + MIN_QUANTUM + " and " + MAX_QUANTUM + ".");
+        }
+    }
+
+    public void validateConfig(AlgorithmType algorithmType, int processCount, int warmupIterations, int measuredIterations, Integer quantum) {
+        if (algorithmType == null) {
+            throw new IllegalArgumentException("Algorithm must be specified.");
+        }
+        if (algorithmType == AlgorithmType.ROUND_ROBIN && quantum == null) {
+            throw new IllegalArgumentException("Time quantum is required for Round Robin.");
+        }
+        BenchmarkConfig config = new BenchmarkConfig();
+        config.setAlgorithmName(algorithmType.name());
+        config.setProcessCount(processCount);
+        config.setWarmupIterations(warmupIterations);
+        config.setMeasuredIterations(measuredIterations);
+        if (quantum != null) {
+            config.setQuantum(quantum);
+        }
+        validateConfig(config);
     }
 
     public BenchmarkRunRecord runBenchmark(long userId, BenchmarkConfig config) {
@@ -106,13 +137,12 @@ public class BenchmarkService {
         SchedulingConfig schedulingConfig = new SchedulingConfig(type, config.getQuantum());
 
         // 1. Generate workload deterministically outside the timing loop
-        WorkloadGenerator.GeneratorConfig genConfig = new WorkloadGenerator.GeneratorConfig(
-                "BenchmarkWorkload", config.getProcessCount(),
+        List<ProcessSpec> processes = WorkloadGenerator.generateProcesses(
+                config.getProcessCount(),
                 config.getMinArrival(), config.getMaxArrival(),
                 config.getMinBurst(), config.getMaxBurst(),
                 config.getSeed()
         );
-        List<ProcessSpec> processes = WorkloadGenerator.generateProcesses(genConfig);
         Workload workload = new Workload(processes);
 
         // 2. JVM warm-up iterations (untimed)

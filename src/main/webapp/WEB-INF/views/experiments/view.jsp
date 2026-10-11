@@ -55,7 +55,16 @@
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Parameters:</td>
-                        <td><code><c:out value="${experiment.algorithmParameters}" default="None"/></code></td>
+                        <td>
+                            <c:choose>
+                                <c:when test="${not empty experiment.formattedParameters}">
+                                    <span style="font-weight: 500;"><c:out value="${experiment.formattedParameters}"/></span>
+                                </c:when>
+                                <c:otherwise>
+                                    <span style="color: var(--color-slate-500);">None</span>
+                                </c:otherwise>
+                            </c:choose>
+                        </td>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Validation Invariants:</td>
@@ -94,7 +103,7 @@
                     <span class="metric-label">Avg Waiting Time</span>
                     <span class="badge badge-primary">Domain</span>
                 </div>
-                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageWaitingTime}"/></div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.formattedAverageWaitingTime}"/></div>
                 <div class="metric-subtext">Time spent in ready queue</div>
             </div>
             <div class="metric-card">
@@ -102,7 +111,7 @@
                     <span class="metric-label">Avg Turnaround Time</span>
                     <span class="badge badge-primary">Domain</span>
                 </div>
-                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageTurnaroundTime}"/></div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.formattedAverageTurnaroundTime}"/></div>
                 <div class="metric-subtext">Arrival to completion duration</div>
             </div>
             <div class="metric-card">
@@ -110,7 +119,7 @@
                     <span class="metric-label">Avg Response Time</span>
                     <span class="badge badge-primary">Domain</span>
                 </div>
-                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.averageResponseTime}"/></div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.formattedAverageResponseTime}"/></div>
                 <div class="metric-subtext">Arrival to initial CPU acquisition</div>
             </div>
             <div class="metric-card">
@@ -134,7 +143,7 @@
                     <span class="metric-label">Throughput</span>
                     <span class="badge badge-success">Efficiency</span>
                 </div>
-                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.throughput}"/></div>
+                <div class="metric-value"><c:out value="${experiment.result.aggregateMetrics.formattedThroughput}"/></div>
                 <div class="metric-subtext">Completed processes per unit time</div>
             </div>
             <div class="metric-card">

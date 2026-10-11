@@ -68,14 +68,7 @@
                     <span class="metric-label">Avg Queue Wait</span>
                     <span class="badge badge-neutral">Latency</span>
                 </div>
-                <div class="metric-value">
-                    <c:choose>
-                        <c:when test="${metrics.avgQueueWaitMs > 0}">
-                            ${String.format('%.1f', metrics.avgQueueWaitMs)} ms
-                        </c:when>
-                        <c:otherwise>0 ms</c:otherwise>
-                    </c:choose>
-                </div>
+                <div class="metric-value"><c:out value="${metrics.formattedAvgQueueWaitMs}"/></div>
                 <div class="metric-subtext">Time in queue prior to worker claim</div>
             </div>
             <div class="metric-card">
@@ -83,14 +76,7 @@
                     <span class="metric-label">Avg Engine Exec</span>
                     <span class="badge badge-neutral">Latency</span>
                 </div>
-                <div class="metric-value">
-                    <c:choose>
-                        <c:when test="${metrics.avgExecutionDurationMs > 0}">
-                            ${String.format('%.1f', metrics.avgExecutionDurationMs)} ms
-                        </c:when>
-                        <c:otherwise>0 ms</c:otherwise>
-                    </c:choose>
-                </div>
+                <div class="metric-value"><c:out value="${metrics.formattedAvgExecutionDurationMs}"/></div>
                 <div class="metric-subtext">Wall-clock algorithm computation duration</div>
             </div>
         </div>

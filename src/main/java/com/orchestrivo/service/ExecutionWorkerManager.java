@@ -27,6 +27,7 @@ public class ExecutionWorkerManager {
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledExecutorService pollerExecutor;
+    private ScheduledExecutorService heartbeatScheduler;
     private ThreadPoolExecutor workerPool;
     private final Semaphore taskLimiter;
     private final String instanceId = "worker-host-" + UUID.randomUUID().toString().substring(0, 8);
@@ -78,9 +79,15 @@ public class ExecutionWorkerManager {
                     new ThreadPoolExecutor.CallerRunsPolicy()
             );
 
-            // 3. Initialize poller loop
+            // 3. Initialize poller loop and heartbeat scheduler
             pollerExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "orchestrivo-queue-poller");
+                t.setDaemon(true);
+                return t;
+            });
+
+            heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "orchestrivo-worker-heartbeat");
                 t.setDaemon(true);
                 return t;
             });
@@ -95,6 +102,9 @@ public class ExecutionWorkerManager {
             System.out.println("[ExecutionWorkerManager] Shutting down background execution engine...");
             if (pollerExecutor != null) {
                 pollerExecutor.shutdownNow();
+            }
+            if (heartbeatScheduler != null) {
+                heartbeatScheduler.shutdownNow();
             }
             if (workerPool != null) {
                 workerPool.shutdown();
@@ -146,6 +156,20 @@ public class ExecutionWorkerManager {
 
     public void executeJob(ExecutionJobRecord job) {
         long startNanos = System.nanoTime();
+        ScheduledFuture<?> heartbeatTask = null;
+        AtomicBoolean leaseLost = new AtomicBoolean(false);
+
+        if (heartbeatScheduler != null && !heartbeatScheduler.isShutdown() && job.getClaimToken() != null) {
+            heartbeatTask = heartbeatScheduler.scheduleWithFixedDelay(() -> {
+                try {
+                    boolean renewed = jobRepository.renewLease(job.getId(), job.getClaimToken(), 30);
+                    if (!renewed) {
+                        leaseLost.set(true);
+                    }
+                } catch (Exception ignored) {}
+            }, 5, 5, TimeUnit.SECONDS);
+        }
+
         try {
             // 1. Parse algorithm and parameters
             AlgorithmType algorithmType = AlgorithmType.valueOf(job.getAlgorithmName().toUpperCase());
@@ -173,12 +197,18 @@ public class ExecutionWorkerManager {
             // 3. Execute scheduling computation
             ScheduleResult result = strategy.schedule(workload, config);
 
+            // Check lease status before persisting
+            if (leaseLost.get()) {
+                System.err.println("[ExecutionWorkerManager] Job #" + job.getId() + " lease was lost during computation; discarding results.");
+                return;
+            }
+
             // 4. Validate output schedule
             ValidationResult validation = validator.validate(workload, result);
 
             long executionDurationMs = Math.max(1, (System.nanoTime() - startNanos) / 1_000_000);
 
-            // 5. Persist experiment run record
+            // 5. Prepare experiment run record
             ExperimentRunRecord runRecord = new ExperimentRunRecord();
             runRecord.setOwnerUserId(job.getOwnerUserId());
             runRecord.setWorkloadId(job.getWorkloadId());
@@ -192,25 +222,25 @@ public class ExecutionWorkerManager {
             if (validation.isValid()) {
                 runRecord.setValidationStatus("VALID");
                 runRecord.setRunStatus("SUCCEEDED");
+
+                // 6. Atomically complete job with experiment run record
+                boolean completed = jobRepository.completeJobWithExperimentRun(job.getId(), job.getClaimToken(), runRecord, executionDurationMs);
+                if (completed) {
+                    if (auditService != null) {
+                        auditService.log(job.getOwnerUserId(), "JOB_COMPLETED", "EXECUTION_JOB",
+                                String.valueOf(job.getId()),
+                                Map.of("algorithm", job.getAlgorithmName(), "durationMs", executionDurationMs, "experimentRunId", runRecord.getId()));
+                    }
+                } else {
+                    System.err.println("[ExecutionWorkerManager] Job #" + job.getId() + " claim token expired or was reclaimed before completion; transaction aborted.");
+                }
             } else {
                 runRecord.setValidationStatus("INVALID");
                 runRecord.setRunStatus("FAILED");
                 runRecord.setErrorMessage(String.join("; ", validation.getErrors()));
-            }
 
-            ExperimentRunRecord savedRun = experimentRunRepository.save(runRecord);
-
-            // 6. Update job status to COMPLETED
-            if (validation.isValid()) {
-                jobRepository.markCompleted(job.getId(), savedRun.getId(), executionDurationMs);
-                if (auditService != null) {
-                    auditService.log(job.getOwnerUserId(), "JOB_COMPLETED", "EXECUTION_JOB",
-                            String.valueOf(job.getId()),
-                            Map.of("algorithm", job.getAlgorithmName(), "durationMs", executionDurationMs, "experimentRunId", savedRun.getId()));
-                }
-            } else {
                 // Validation error is non-transient, mark FAILED without retry
-                jobRepository.markFailed(job.getId(), "Schedule validation failure: " + String.join("; ", validation.getErrors()), false);
+                jobRepository.markFailed(job.getId(), job.getClaimToken(), "Schedule validation failure: " + String.join("; ", validation.getErrors()), false);
                 if (auditService != null) {
                     auditService.log(job.getOwnerUserId(), "JOB_FAILED", "EXECUTION_JOB",
                             String.valueOf(job.getId()),
@@ -223,12 +253,16 @@ public class ExecutionWorkerManager {
             System.err.println("[ExecutionWorkerManager] Job #" + job.getId() + " execution failure: " + e.getMessage());
 
             boolean canRetry = job.getAttemptCount() < job.getMaxAttempts();
-            jobRepository.markFailed(job.getId(), "Execution error: " + e.getMessage(), canRetry);
+            jobRepository.markFailed(job.getId(), job.getClaimToken(), "Execution error: " + e.getMessage(), canRetry);
 
             if (auditService != null) {
                 auditService.log(job.getOwnerUserId(), "JOB_FAILED", "EXECUTION_JOB",
                         String.valueOf(job.getId()),
                         Map.of("reason", e.getMessage() != null ? e.getMessage() : "Unknown", "retryScheduled", canRetry));
+            }
+        } finally {
+            if (heartbeatTask != null) {
+                heartbeatTask.cancel(false);
             }
         }
     }

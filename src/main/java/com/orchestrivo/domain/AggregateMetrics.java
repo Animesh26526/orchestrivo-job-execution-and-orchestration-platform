@@ -32,4 +32,28 @@ public class AggregateMetrics {
     public int getCpuIdleTime() { return cpuIdleTime; }
     public double getThroughput() { return throughput; }
     public int getContextSwitchCount() { return contextSwitchCount; }
+
+    public String getFormattedThroughput() {
+        return String.format(java.util.Locale.US, "%.4f", throughput);
+    }
+
+    public String getFormattedAverageWaitingTime() {
+        return String.format(java.util.Locale.US, "%.2f", averageWaitingTime);
+    }
+
+    public String getFormattedAverageTurnaroundTime() {
+        return String.format(java.util.Locale.US, "%.2f", averageTurnaroundTime);
+    }
+
+    public String getFormattedAverageResponseTime() {
+        return String.format(java.util.Locale.US, "%.2f", averageResponseTime);
+    }
+
+    public double getCpuUtilizationPercentage() {
+        return totalDuration > 0 ? ((double) cpuBusyTime / totalDuration) * 100.0 : 0.0;
+    }
+
+    public String getFormattedCpuUtilization() {
+        return String.format(java.util.Locale.US, "%.1f%%", getCpuUtilizationPercentage());
+    }
 }

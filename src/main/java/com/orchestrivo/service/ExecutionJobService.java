@@ -82,7 +82,18 @@ public class ExecutionJobService {
         job.setMaxAttempts(3);
         job.setIdempotencyKey(idempotencyKey != null && !idempotencyKey.trim().isEmpty() ? idempotencyKey.trim() : null);
 
-        ExecutionJobRecord savedJob = jobRepository.save(job);
+        ExecutionJobRecord savedJob;
+        try {
+            savedJob = jobRepository.save(job);
+        } catch (Exception e) {
+            if (idempotencyKey != null && !idempotencyKey.trim().isEmpty()) {
+                Optional<ExecutionJobRecord> existing = jobRepository.findByIdempotencyKey(userId, idempotencyKey.trim());
+                if (existing.isPresent()) {
+                    return existing.get();
+                }
+            }
+            throw e;
+        }
         notifyWorker();
         return savedJob;
     }

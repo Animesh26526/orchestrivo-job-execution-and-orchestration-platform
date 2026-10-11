@@ -50,7 +50,8 @@ public class AppConfigListener implements ServletContextListener {
 
             System.out.println("Orchestrivo initialized successfully with background worker engine.");
         } catch (Exception e) {
-            System.err.println("Warning: Orchestrivo failed to initialize DataSource or background worker: " + e.getMessage());
+            System.err.println("Fatal: Orchestrivo failed to initialize DataSource or background worker: " + e.getMessage());
+            throw new RuntimeException("Orchestrivo critical startup failure: " + e.getMessage(), e);
         }
     }
 

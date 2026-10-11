@@ -71,7 +71,7 @@
                 <span class="badge badge-primary">Model</span>
             </div>
             <div class="metric-value" style="font-size: 20px;"><c:out value="${job.algorithmName}"/></div>
-            <div class="metric-subtext">Parameters: <c:out value="${job.algorithmParameters}" default="None"/></div>
+            <div class="metric-subtext">Parameters: <c:out value="${job.formattedParameters}"/></div>
         </div>
 
         <div class="metric-card">
@@ -103,11 +103,11 @@
         </div>
     </div>
 
-    <c:if test="${not empty job.errorMessage}">
+    <c:if test="${not empty job.userFacingErrorMessage}">
         <div class="alert alert-danger">
             <div>
                 <strong>Execution Error:</strong>
-                <p style="margin-top: 4px;"><c:out value="${job.errorMessage}"/></p>
+                <p style="margin-top: 4px;"><c:out value="${job.userFacingErrorMessage}"/></p>
             </div>
         </div>
     </c:if>
@@ -173,12 +173,41 @@
         <div class="card-header">
             <div>
                 <h2 class="card-title">Immutable Workload Input Snapshot</h2>
-                <p class="card-description">Exact process specification captured at submission time to ensure reproducibility.</p>
+                <p class="card-description">Exact process specifications captured at submission time to ensure reproducibility</p>
             </div>
+            <span class="badge badge-neutral">${job.snapshotProcesses.size()} Processes</span>
         </div>
-        <div class="code-box" style="max-height: 250px; overflow-y: auto;">
-            <c:out value="${job.inputSnapshot}"/>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none; max-height: 280px; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Process ID</th>
+                        <th>Arrival Time</th>
+                        <th>Burst Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <c:forEach var="p" items="${job.snapshotProcesses}">
+                    <tr>
+                        <td><strong><code><c:out value="${p.processId}"/></code></strong></td>
+                        <td>${p.arrivalTime}</td>
+                        <td>${p.burstTime}</td>
+                    </tr>
+                </c:forEach>
+                <c:if test="${empty job.snapshotProcesses}">
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #94a3b8; padding: 16px;">No process snapshot data available.</td>
+                    </tr>
+                </c:if>
+                </tbody>
+            </table>
         </div>
+        <details style="margin-top: 14px;">
+            <summary style="cursor: pointer; font-size: 12px; color: var(--color-slate-500); font-weight: 500;">Inspect Raw Snapshot JSON (Debug)</summary>
+            <div class="code-box" style="margin-top: 8px; max-height: 200px; overflow-y: auto;">
+                <c:out value="${job.inputSnapshot}"/>
+            </div>
+        </details>
     </div>
 </div>
 

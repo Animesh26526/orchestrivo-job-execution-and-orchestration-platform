@@ -126,4 +126,38 @@ public class CsvExporter {
         }
         writer.flush();
     }
+
+    public static void exportBenchmarkRun(com.orchestrivo.model.BenchmarkRunRecord run, Writer writer) throws IOException {
+        writer.write("# ORCHESTRIVO BENCHMARK RUN REPORT\r\n");
+        writer.write("id,algorithm_name,process_count,warmup_iterations,measured_iterations,seed,created_at\r\n");
+        writer.write(escapeField(run.getId()) + ",");
+        writer.write(escapeField(run.getAlgorithmName()) + ",");
+        writer.write(escapeField(run.getProcessCount()) + ",");
+        writer.write(escapeField(run.getWarmupIterations()) + ",");
+        writer.write(escapeField(run.getMeasuredIterations()) + ",");
+        writer.write(escapeField(run.getSeed()) + ",");
+        writer.write(escapeField(run.getCreatedAt()) + "\r\n\r\n");
+
+        writer.write("# BENCHMARK EXECUTION SUMMARY\r\n");
+        writer.write("median_nanos,mean_nanos,min_nanos,max_nanos,p95_nanos,std_dev_nanos,cv_percent,mean_millis\r\n");
+        writer.write(escapeField(run.getMedianNanos()) + ",");
+        writer.write(escapeField(run.getMeanNanos()) + ",");
+        writer.write(escapeField(run.getMinNanos()) + ",");
+        writer.write(escapeField(run.getMaxNanos()) + ",");
+        writer.write(escapeField(run.getP95Nanos()) + ",");
+        writer.write(escapeField(run.getStdDevNanos()) + ",");
+        writer.write(escapeField(String.format(java.util.Locale.US, "%.2f", run.getCoefficientOfVariation())) + ",");
+        writer.write(escapeField(String.format(java.util.Locale.US, "%.4f", run.getMeanMillis())) + "\r\n\r\n");
+
+        if (run.getMeasurements() != null && !run.getMeasurements().isEmpty()) {
+            writer.write("# ITERATION SAMPLES\r\n");
+            writer.write("iteration,duration_nanos,duration_millis\r\n");
+            for (com.orchestrivo.model.BenchmarkMeasurement m : run.getMeasurements()) {
+                writer.write(escapeField(m.getIterationNumber()) + ",");
+                writer.write(escapeField(m.getDurationNanos()) + ",");
+                writer.write(escapeField(String.format(java.util.Locale.US, "%.4f", m.getDurationMillis())) + "\r\n");
+            }
+        }
+        writer.flush();
+    }
 }

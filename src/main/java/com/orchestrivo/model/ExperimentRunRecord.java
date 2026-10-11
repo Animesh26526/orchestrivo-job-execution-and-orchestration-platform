@@ -64,4 +64,29 @@ public class ExperimentRunRecord {
             return Collections.emptyList();
         }
     }
+
+    public String getFormattedParameters() {
+        if (algorithmParameters == null || algorithmParameters.trim().isEmpty()) {
+            return "Standard (Default parameters)";
+        }
+        try {
+            Type type = new TypeToken<java.util.Map<String, Object>>(){}.getType();
+            java.util.Map<String, Object> map = new Gson().fromJson(algorithmParameters, type);
+            if (map == null || map.isEmpty()) {
+                return "Standard (Default parameters)";
+            }
+            List<String> parts = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
+                String key = entry.getKey();
+                if ("quantum".equalsIgnoreCase(key)) {
+                    parts.add("Time Quantum: " + entry.getValue());
+                } else {
+                    parts.add(key + ": " + entry.getValue());
+                }
+            }
+            return String.join(", ", parts);
+        } catch (Exception e) {
+            return algorithmParameters;
+        }
+    }
 }

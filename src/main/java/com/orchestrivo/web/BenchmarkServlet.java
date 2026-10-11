@@ -82,39 +82,105 @@ public class BenchmarkServlet extends HttpServlet {
             config.setAlgorithmName(req.getParameter("algorithmName"));
 
             String q = req.getParameter("quantum");
-            if (q != null && !q.trim().isEmpty()) config.setQuantum(Integer.parseInt(q.trim()));
+            if (q != null && !q.trim().isEmpty()) {
+                try {
+                    config.setQuantum(Integer.parseInt(q.trim()));
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("Time quantum must be a valid integer between 1 and 100.");
+                }
+            }
 
             String pc = req.getParameter("processCount");
-            if (pc != null && !pc.trim().isEmpty()) config.setProcessCount(Integer.parseInt(pc.trim()));
+            if (pc == null || pc.trim().isEmpty()) {
+                throw new IllegalArgumentException("Process count is required (between 1 and 500).");
+            }
+            try {
+                config.setProcessCount(Integer.parseInt(pc.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Process count must be a valid integer between 1 and 500.");
+            }
 
             String minA = req.getParameter("minArrival");
-            if (minA != null && !minA.trim().isEmpty()) config.setMinArrival(Integer.parseInt(minA.trim()));
+            if (minA == null || minA.trim().isEmpty()) {
+                throw new IllegalArgumentException("Minimum arrival time is required.");
+            }
+            try {
+                config.setMinArrival(Integer.parseInt(minA.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Minimum arrival time must be a valid non-negative integer.");
+            }
 
             String maxA = req.getParameter("maxArrival");
-            if (maxA != null && !maxA.trim().isEmpty()) config.setMaxArrival(Integer.parseInt(maxA.trim()));
+            if (maxA == null || maxA.trim().isEmpty()) {
+                throw new IllegalArgumentException("Maximum arrival time is required.");
+            }
+            try {
+                config.setMaxArrival(Integer.parseInt(maxA.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Maximum arrival time must be a valid non-negative integer.");
+            }
 
             String minB = req.getParameter("minBurst");
-            if (minB != null && !minB.trim().isEmpty()) config.setMinBurst(Integer.parseInt(minB.trim()));
+            if (minB == null || minB.trim().isEmpty()) {
+                throw new IllegalArgumentException("Minimum burst time is required.");
+            }
+            try {
+                config.setMinBurst(Integer.parseInt(minB.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Minimum burst time must be a valid positive integer.");
+            }
 
             String maxB = req.getParameter("maxBurst");
-            if (maxB != null && !maxB.trim().isEmpty()) config.setMaxBurst(Integer.parseInt(maxB.trim()));
+            if (maxB == null || maxB.trim().isEmpty()) {
+                throw new IllegalArgumentException("Maximum burst time is required.");
+            }
+            try {
+                config.setMaxBurst(Integer.parseInt(maxB.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Maximum burst time must be a valid positive integer.");
+            }
 
             String s = req.getParameter("seed");
-            if (s != null && !s.trim().isEmpty()) config.setSeed(Long.parseLong(s.trim()));
+            if (s != null && !s.trim().isEmpty()) {
+                try {
+                    config.setSeed(Long.parseLong(s.trim()));
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("Reproducibility seed must be a valid integer.");
+                }
+            }
 
             String w = req.getParameter("warmupIterations");
-            if (w != null && !w.trim().isEmpty()) config.setWarmupIterations(Integer.parseInt(w.trim()));
+            if (w == null || w.trim().isEmpty()) {
+                throw new IllegalArgumentException("Warm-up iterations is required (between 1 and 100).");
+            }
+            try {
+                config.setWarmupIterations(Integer.parseInt(w.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Warm-up iterations must be a valid integer between 1 and 100.");
+            }
 
             String m = req.getParameter("measuredIterations");
-            if (m != null && !m.trim().isEmpty()) config.setMeasuredIterations(Integer.parseInt(m.trim()));
+            if (m == null || m.trim().isEmpty()) {
+                throw new IllegalArgumentException("Measured iterations is required (between 1 and 1000).");
+            }
+            try {
+                config.setMeasuredIterations(Integer.parseInt(m.trim()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Measured iterations must be a valid integer between 1 and 1000.");
+            }
 
             BenchmarkRunRecord run = ServiceRegistry.benchmarkService.runBenchmark(user.getId(), config);
             if (ServiceRegistry.auditService != null) {
-                ServiceRegistry.auditService.log(user.getId(), "BENCHMARK_RUN", "BENCHMARK_RUN", String.valueOf(run.getId()), Map.of("algorithm", run.getAlgorithmName(), "processCount", run.getProcessCount(), "medianMicros", run.getMedianMicros()));
+                ServiceRegistry.auditService.log(user.getId(), "BENCHMARK_RUN", "BENCHMARK_RUN", String.valueOf(run.getId()),
+                        Map.of("algorithm", run.getAlgorithmName(), "processCount", run.getProcessCount(), "medianMicros", run.getMedianMicros()));
             }
             resp.sendRedirect(req.getContextPath() + "/benchmarks/view?id=" + run.getId());
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             req.setAttribute("error", e.getMessage());
+            req.setAttribute("config", config);
+            req.getRequestDispatcher("/WEB-INF/views/benchmarks/new.jsp").forward(req, resp);
+        } catch (Exception e) {
+            req.setAttribute("error", "An error occurred while executing the benchmark: " + (e.getMessage() != null ? e.getMessage() : "Unknown error"));
             req.setAttribute("config", config);
             req.getRequestDispatcher("/WEB-INF/views/benchmarks/new.jsp").forward(req, resp);
         }

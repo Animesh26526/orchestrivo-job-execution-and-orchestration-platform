@@ -96,22 +96,28 @@ public class BenchmarkServiceTest {
         // Process count out of bounds
         BenchmarkService.BenchmarkConfig c2 = new BenchmarkService.BenchmarkConfig();
         c2.setAlgorithmName("FCFS");
-        c2.setProcessCount(1); // Below min of 5
+        c2.setProcessCount(0); // Below canonical min of 1
         assertThrows(IllegalArgumentException.class, () -> benchmarkService.validateConfig(c2));
 
-        c2.setProcessCount(501); // Above max 500
+        c2.setProcessCount(501); // Above canonical max of 500
         assertThrows(IllegalArgumentException.class, () -> benchmarkService.validateConfig(c2));
 
         // Warmup iterations out of bounds
         BenchmarkService.BenchmarkConfig c3 = new BenchmarkService.BenchmarkConfig();
         c3.setAlgorithmName("FCFS");
-        c3.setWarmupIterations(0);
+        c3.setWarmupIterations(0); // Below canonical min of 1
+        assertThrows(IllegalArgumentException.class, () -> benchmarkService.validateConfig(c3));
+
+        c3.setWarmupIterations(101); // Above canonical max of 100
         assertThrows(IllegalArgumentException.class, () -> benchmarkService.validateConfig(c3));
 
         // Repetitions out of bounds
         BenchmarkService.BenchmarkConfig c4 = new BenchmarkService.BenchmarkConfig();
         c4.setAlgorithmName("FCFS");
-        c4.setMeasuredIterations(2); // below min 3
+        c4.setMeasuredIterations(0); // Below canonical min of 1
+        assertThrows(IllegalArgumentException.class, () -> benchmarkService.validateConfig(c4));
+
+        c4.setMeasuredIterations(1001); // Above canonical max of 1000
         assertThrows(IllegalArgumentException.class, () -> benchmarkService.validateConfig(c4));
     }
 }

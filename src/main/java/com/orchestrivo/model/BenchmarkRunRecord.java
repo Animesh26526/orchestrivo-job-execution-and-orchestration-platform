@@ -67,4 +67,57 @@ public class BenchmarkRunRecord {
     public double getMinMillis() { return minNanos / 1_000_000.0; }
     public double getMaxMillis() { return maxNanos / 1_000_000.0; }
     public double getStdDevMillis() { return stdDevNanos / 1_000_000.0; }
+
+    public double getMeanNanos() {
+        if (measurements == null || measurements.isEmpty()) {
+            return medianNanos;
+        }
+        double sum = 0.0;
+        for (BenchmarkMeasurement m : measurements) {
+            sum += m.getDurationNanos();
+        }
+        return sum / measurements.size();
+    }
+
+    public double getMeanMicros() { return getMeanNanos() / 1_000.0; }
+    public double getMeanMillis() { return getMeanNanos() / 1_000_000.0; }
+
+    public double getP95Nanos() {
+        if (measurements == null || measurements.isEmpty()) {
+            return maxNanos;
+        }
+        List<Long> sorted = new ArrayList<>();
+        for (BenchmarkMeasurement m : measurements) {
+            sorted.add(m.getDurationNanos());
+        }
+        Collections.sort(sorted);
+        int index = (int) Math.ceil(0.95 * sorted.size()) - 1;
+        index = Math.max(0, Math.min(sorted.size() - 1, index));
+        return sorted.get(index);
+    }
+
+    public double getP95Micros() { return getP95Nanos() / 1_000.0; }
+    public double getP95Millis() { return getP95Nanos() / 1_000_000.0; }
+
+    public boolean isSampleSizeSmallForP95() {
+        return measurements == null || measurements.size() < 20;
+    }
+
+    public double getCoefficientOfVariation() {
+        double mean = getMeanNanos();
+        if (mean <= 0.0) return 0.0;
+        return (stdDevNanos / mean) * 100.0;
+    }
+
+    public java.util.Map<String, Object> getEnvironmentInfoMap() {
+        if (environmentInfo == null || environmentInfo.trim().isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){}.getType();
+            return new com.google.gson.Gson().fromJson(environmentInfo, type);
+        } catch (Exception e) {
+            return Collections.emptyMap();
+        }
+    }
 }

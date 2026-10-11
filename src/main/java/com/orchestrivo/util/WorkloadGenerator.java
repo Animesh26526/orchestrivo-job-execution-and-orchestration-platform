@@ -75,17 +75,37 @@ public class WorkloadGenerator {
 
     public static List<ProcessSpec> generateProcesses(GeneratorConfig config) {
         validateConfig(config);
+        return generateProcesses(config.getProcessCount(), config.getMinArrival(), config.getMaxArrival(),
+                config.getMinBurst(), config.getMaxBurst(), config.getSeed());
+    }
 
-        Random rng = new Random(config.getSeed());
+    public static List<ProcessSpec> generateProcesses(int processCount, int minArrival, int maxArrival, int minBurst, int maxBurst, long seed) {
+        if (processCount <= 0) {
+            throw new IllegalArgumentException("Process count must be strictly positive.");
+        }
+        if (minArrival < 0) {
+            throw new IllegalArgumentException("Minimum arrival time cannot be negative.");
+        }
+        if (maxArrival < minArrival) {
+            throw new IllegalArgumentException("Maximum arrival time must be greater than or equal to minimum arrival time.");
+        }
+        if (minBurst <= 0) {
+            throw new IllegalArgumentException("Minimum burst time must be strictly positive.");
+        }
+        if (maxBurst < minBurst) {
+            throw new IllegalArgumentException("Maximum burst time must be greater than or equal to minimum burst time.");
+        }
+
+        Random rng = new Random(seed);
         List<ProcessSpec> list = new ArrayList<>();
 
-        int arrivalSpan = config.getMaxArrival() - config.getMinArrival() + 1;
-        int burstSpan = config.getMaxBurst() - config.getMinBurst() + 1;
+        int arrivalSpan = maxArrival - minArrival + 1;
+        int burstSpan = maxBurst - minBurst + 1;
 
-        for (int i = 1; i <= config.getProcessCount(); i++) {
+        for (int i = 1; i <= processCount; i++) {
             String pid = "P" + i;
-            int arrival = config.getMinArrival() + rng.nextInt(arrivalSpan);
-            int burst = config.getMinBurst() + rng.nextInt(burstSpan);
+            int arrival = minArrival + rng.nextInt(arrivalSpan);
+            int burst = minBurst + rng.nextInt(burstSpan);
             list.add(new ProcessSpec(pid, arrival, burst));
         }
 

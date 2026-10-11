@@ -81,6 +81,7 @@
     </div>
 
     <!-- Statistical Metric Cards -->
+    <!-- Statistical Metric Cards -->
     <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--color-slate-900);">Statistical Latency Summary (Wall-Clock Host Engine)</h2>
     <div class="metrics-grid">
         <div class="metric-card">
@@ -88,39 +89,48 @@
                 <span class="metric-label">Median Latency</span>
                 <span class="badge badge-primary">P50</span>
             </div>
-            <div class="metric-value">${benchmark.medianMicros} &micro;s</div>
-            <div class="metric-subtext">(${benchmark.medianMillis} ms)</div>
+            <div class="metric-value">${String.format('%.2f', benchmark.medianMicros)} &micro;s</div>
+            <div class="metric-subtext">(${String.format('%.3f', benchmark.medianMillis)} ms)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-header">
+                <span class="metric-label">P95 Latency</span>
+                <span class="badge ${benchmark.sampleSizeSmallForP95 ? 'badge-warning' : 'badge-primary'}">${benchmark.sampleSizeSmallForP95 ? 'P95 (N < 20)' : 'P95'}</span>
+            </div>
+            <div class="metric-value">${String.format('%.2f', benchmark.p95Micros)} &micro;s</div>
+            <div class="metric-subtext">(${String.format('%.3f', benchmark.p95Millis)} ms)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-header">
+                <span class="metric-label">Mean Latency</span>
+                <span class="badge badge-neutral">Mean</span>
+            </div>
+            <div class="metric-value">${String.format('%.2f', benchmark.meanMicros)} &micro;s</div>
+            <div class="metric-subtext">(${String.format('%.3f', benchmark.meanMillis)} ms)</div>
         </div>
         <div class="metric-card">
             <div class="metric-header">
                 <span class="metric-label">Min Latency</span>
                 <span class="badge badge-success">Fastest</span>
             </div>
-            <div class="metric-value">${benchmark.minMicros} &micro;s</div>
-            <div class="metric-subtext">(${benchmark.minMillis} ms)</div>
+            <div class="metric-value">${String.format('%.2f', benchmark.minMicros)} &micro;s</div>
+            <div class="metric-subtext">(${String.format('%.3f', benchmark.minMillis)} ms)</div>
         </div>
         <div class="metric-card">
             <div class="metric-header">
                 <span class="metric-label">Max Latency</span>
                 <span class="badge badge-warning">Slowest</span>
             </div>
-            <div class="metric-value">${benchmark.maxMicros} &micro;s</div>
-            <div class="metric-subtext">(${benchmark.maxMillis} ms)</div>
+            <div class="metric-value">${String.format('%.2f', benchmark.maxMicros)} &micro;s</div>
+            <div class="metric-subtext">(${String.format('%.3f', benchmark.maxMillis)} ms)</div>
         </div>
         <div class="metric-card">
             <div class="metric-header">
                 <span class="metric-label">Std Deviation</span>
-                <span class="badge badge-neutral">Variance</span>
+                <span class="badge badge-neutral">Dispersion</span>
             </div>
-            <div class="metric-value">${benchmark.stdDevMicros} &micro;s</div>
-            <div class="metric-subtext">(${benchmark.stdDevMillis} ms)</div>
-        </div>
-    </div>
-
-    <div class="alert alert-info">
-        <div>
-            <strong>Host Latency vs Scheduling Domain Separation:</strong>
-            These latency measurements capture raw JVM execution time of the scheduling algorithm in memory. They are strictly separate from simulated scheduling domain metrics (e.g. turnaround time or waiting time). Furthermore, these micro-benchmarks are isolated execution measurements on the local host machine, not proof of clustered or distributed throughput.
+            <div class="metric-value">${String.format('%.2f', benchmark.stdDevMicros)} &micro;s</div>
+            <div class="metric-subtext">CV: ${String.format('%.2f', benchmark.coefficientOfVariation)}%</div>
         </div>
     </div>
 
@@ -132,7 +142,7 @@
                 <p class="card-description">Sequential latency across measured repetitions (Microseconds &micro;s)</p>
             </div>
             <div style="font-size: 12px; color: var(--color-slate-500);">
-                Min: <strong>${benchmark.minMicros} &micro;s</strong> &bull; Median: <strong>${benchmark.medianMicros} &micro;s</strong> &bull; Max: <strong>${benchmark.maxMicros} &micro;s</strong>
+                Min: <strong>${String.format('%.2f', benchmark.minMicros)} &micro;s</strong> &bull; Median: <strong>${String.format('%.2f', benchmark.medianMicros)} &micro;s</strong> &bull; Max: <strong>${String.format('%.2f', benchmark.maxMicros)} &micro;s</strong>
             </div>
         </div>
         <div class="latency-chart-container">
@@ -156,8 +166,8 @@
                 </c:forEach>
 
                 <!-- Labels -->
-                <text x="35" y="24" fill="#94a3b8" font-size="10" text-anchor="end">${benchmark.maxMicros}&micro;s</text>
-                <text x="35" y="84" fill="#94a3b8" font-size="10" text-anchor="end">${benchmark.medianMicros}&micro;s</text>
+                <text x="35" y="24" fill="#94a3b8" font-size="10" text-anchor="end">${String.format('%.1f', benchmark.maxMicros)}&micro;s</text>
+                <text x="35" y="84" fill="#94a3b8" font-size="10" text-anchor="end">${String.format('%.1f', benchmark.medianMicros)}&micro;s</text>
                 <text x="35" y="144" fill="#94a3b8" font-size="10" text-anchor="end">0&micro;s</text>
                 <text x="40" y="165" fill="#64748b" font-size="10">Iter #1</text>
                 <text x="780" y="165" fill="#64748b" font-size="10" text-anchor="end">Iter #${benchmark.measurements.size()}</text>
@@ -173,10 +183,51 @@
                 <p class="card-description">JVM, CPU, and host OS specifications captured during execution</p>
             </div>
         </div>
-        <div class="code-box">
-            <c:out value="${benchmark.environmentInfo}"/>
+        <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <td style="width: 220px; font-weight: 600;">Java Runtime / VM:</td>
+                        <td>
+                            <code><c:out value="${benchmark.environmentInfoMap['javaVersion']}" default="Unknown"/></code> &mdash;
+                            <c:out value="${benchmark.environmentInfoMap['javaVendor']}" default="Unknown"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Operating System:</td>
+                        <td>
+                            <c:out value="${benchmark.environmentInfoMap['osName']}" default="Unknown"/>
+                            (<c:out value="${benchmark.environmentInfoMap['osArch']}" default="Unknown"/>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Available CPU Cores:</td>
+                        <td><strong><c:out value="${benchmark.environmentInfoMap['availableProcessors']}" default="1"/></strong> logical processors</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Measurement Boundary:</td>
+                        <td>In-memory algorithm execution loop (workload generation excluded from timed section)</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
+        <details style="margin-top: 14px;">
+            <summary style="cursor: pointer; font-size: 12px; color: var(--color-slate-500); font-weight: 500;">Inspect Raw Environment JSON (Debug)</summary>
+            <div class="code-box" style="margin-top: 8px;">
+                <c:out value="${benchmark.environmentInfo}"/>
+            </div>
+        </details>
     </div>
+
+    <details style="margin-bottom: 24px;">
+        <summary style="cursor: pointer; font-weight: 500; color: var(--color-slate-600); font-size: 13px;">Methodology & Latency Interpretation Notes</summary>
+        <div class="alert alert-info" style="margin-top: 8px;">
+            <div>
+                <strong>Host Latency vs Scheduling Domain Separation:</strong>
+                These latency measurements capture raw JVM execution time of the scheduling algorithm in memory. They are strictly separate from simulated scheduling domain metrics (such as simulated turnaround time or waiting time). Furthermore, these micro-benchmarks are isolated execution measurements on the local host machine, not proof of clustered or distributed throughput.
+            </div>
+        </div>
+    </details>
 
     <!-- Measured Iterations Table -->
     <div class="card">

@@ -112,4 +112,36 @@ public class CsvExporterTest {
         assertTrue(output.contains("1,FCFS,,VALID,2.5,7.5,2.5,0.2,0,0,15"));
         assertTrue(output.contains("2,SJF,,VALID,1.8,6.8,1.8,0.2,0,0,15"));
     }
+
+    @Test
+    void testExportBenchmarkRun() throws IOException {
+        com.orchestrivo.model.BenchmarkRunRecord bench = new com.orchestrivo.model.BenchmarkRunRecord();
+        bench.setId(99L);
+        bench.setAlgorithmName("ROUND_ROBIN");
+        bench.setProcessCount(50);
+        bench.setWarmupIterations(5);
+        bench.setMeasuredIterations(10);
+        bench.setSeed(42L);
+        bench.setCreatedAt(LocalDateTime.of(2026, 1, 1, 12, 0));
+        bench.setMedianNanos(150_000.0);
+        bench.setMinNanos(140_000L);
+        bench.setMaxNanos(200_000L);
+        bench.setStdDevNanos(15_000.0);
+        bench.setMeasurements(List.of(
+                new com.orchestrivo.model.BenchmarkMeasurement(1, 140_000L),
+                new com.orchestrivo.model.BenchmarkMeasurement(2, 150_000L),
+                new com.orchestrivo.model.BenchmarkMeasurement(3, 160_000L)
+        ));
+
+        StringWriter sw = new StringWriter();
+        CsvExporter.exportBenchmarkRun(bench, sw);
+        String output = sw.toString();
+
+        assertTrue(output.contains("# ORCHESTRIVO BENCHMARK RUN REPORT"));
+        assertTrue(output.contains("99,ROUND_ROBIN,50,5,10,42"));
+        assertTrue(output.contains("# BENCHMARK EXECUTION SUMMARY"));
+        assertTrue(output.contains("140000,200000"));
+        assertTrue(output.contains("# ITERATION SAMPLES"));
+        assertTrue(output.contains("1,140000,0.1400"));
+    }
 }

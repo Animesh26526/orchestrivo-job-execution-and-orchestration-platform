@@ -99,7 +99,7 @@ public class JobServlet extends HttpServlet {
             json.put("experimentRunId", job.getExperimentRunId());
             json.put("executionDurationMs", job.getExecutionDurationMs());
             json.put("queueWaitMs", job.getQueueWaitMs());
-            json.put("errorMessage", job.getErrorMessage());
+            json.put("errorMessage", job.getUserFacingErrorMessage());
 
             resp.setContentType("application/json; charset=UTF-8");
             resp.getWriter().write(new Gson().toJson(json));

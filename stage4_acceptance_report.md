@@ -403,7 +403,7 @@ The automated test suite expanded from **89 tests** in Stage 3 to **110 tests** 
 ### Migration Execution
 Migration `V3__execution_jobs.sql` was executed successfully against local MySQL 8 database `orchestrivo`:
 ```
-mysql -u orchestrivo_user -pAnimesh@26526 orchestrivo < src/main/resources/db/V3__execution_jobs.sql
+mysql -u orchestrivo_user -p<DB_PASSWORD> orchestrivo < src/main/resources/db/V3__execution_jobs.sql
 ```
 
 ### Schema State Verification

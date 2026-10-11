@@ -22,9 +22,19 @@ public interface ExecutionJobRepository {
 
     Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId);
 
+    Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId, int leaseDurationSeconds);
+
+    boolean renewLease(long jobId, String claimToken, int durationSeconds);
+
     boolean markCompleted(long jobId, long experimentRunId, long durationMs);
 
+    boolean markCompleted(long jobId, String claimToken, long experimentRunId, long durationMs);
+
     boolean markFailed(long jobId, String errorMessage, boolean canRetry);
+
+    boolean markFailed(long jobId, String claimToken, String errorMessage, boolean canRetry);
+
+    boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs);
 
     boolean cancelJob(long jobId, long userId);
 

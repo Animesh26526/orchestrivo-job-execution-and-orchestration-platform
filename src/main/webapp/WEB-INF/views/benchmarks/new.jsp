@@ -31,13 +31,6 @@
         </div>
     </div>
 
-    <div class="alert alert-info">
-        <div>
-            <strong>Micro-Benchmark Execution Protocol:</strong>
-            Untimed warm-up cycles prime the HotSpot JIT compiler without recording timestamps. Timed iterations subsequently measure elapsed wall-clock nanoseconds using <code>System.nanoTime()</code>. Output schedules undergo independent validation on every single repetition.
-        </div>
-    </div>
-
     <c:if test="${not empty error}">
         <div class="alert alert-danger">
             <strong>Error:</strong> <c:out value="${error}"/>
@@ -102,12 +95,12 @@
                 <div class="form-group">
                     <label class="form-label" for="warmupIterations">Warm-Up Cycles (1 - 100):</label>
                     <input type="number" id="warmupIterations" name="warmupIterations" class="form-input" value="${config.warmupIterations != 0 ? config.warmupIterations : 10}" min="1" max="100" required/>
-                    <div class="form-hint">Untimed iterations to prime JIT compiler</div>
+                    <div class="form-hint">Untimed iterations to reach steady-state execution</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="measuredIterations">Measured Iterations (1 - 1000):</label>
                     <input type="number" id="measuredIterations" name="measuredIterations" class="form-input" value="${config.measuredIterations != 0 ? config.measuredIterations : 50}" min="1" max="1000" required/>
-                    <div class="form-hint">Timed iterations recorded with nanoTime()</div>
+                    <div class="form-hint">Repetitions recorded for statistical latency distribution</div>
                 </div>
             </div>
 

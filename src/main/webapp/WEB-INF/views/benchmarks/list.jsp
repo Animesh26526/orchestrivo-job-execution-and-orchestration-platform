@@ -22,18 +22,10 @@
     <div class="page-header">
         <div class="page-title-group">
             <h1>Algorithm Engine Micro-Benchmarks</h1>
-            <p class="page-subtitle">Wall-clock JIT execution timing and statistical analysis under synthetic workloads</p>
+            <p class="page-subtitle">Compare recorded algorithm execution latencies across synthetic workloads and iterations</p>
         </div>
         <div class="page-actions">
             <a href="<%= request.getContextPath() %>/benchmarks/run" class="btn btn-primary">+ Run New Benchmark</a>
-        </div>
-    </div>
-
-    <div class="alert alert-info">
-        <div>
-            <strong>Micro-Benchmarking Methodology:</strong>
-            Wall-clock execution timing is captured via <code>System.nanoTime()</code> across repeated measured iterations following untimed JIT warm-up cycles. Output schedules are independently validated for algorithmic correctness on every run.
-            <br/><em style="margin-top: 4px; display: inline-block;">Note: Engine execution timing measures host simulation latency, which is strictly distinct from simulated scheduling domain metrics.</em>
         </div>
     </div>
 

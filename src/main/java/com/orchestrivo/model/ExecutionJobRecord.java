@@ -1,6 +1,10 @@
 package com.orchestrivo.model;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public class ExecutionJobRecord {
     private long id;
@@ -13,7 +17,9 @@ public class ExecutionJobRecord {
     private int attemptCount = 0;
     private int maxAttempts = 3;
     private String claimedBy;
+    private String claimToken;
     private LocalDateTime claimedAt;
+    private LocalDateTime leaseExpiresAt;
     private LocalDateTime createdAt;
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
@@ -186,6 +192,79 @@ public class ExecutionJobRecord {
 
     public void setWorkloadName(String workloadName) {
         this.workloadName = workloadName;
+    }
+
+    public String getClaimToken() {
+        return claimToken;
+    }
+
+    public void setClaimToken(String claimToken) {
+        this.claimToken = claimToken;
+    }
+
+    public LocalDateTime getLeaseExpiresAt() {
+        return leaseExpiresAt;
+    }
+
+    public void setLeaseExpiresAt(LocalDateTime leaseExpiresAt) {
+        this.leaseExpiresAt = leaseExpiresAt;
+    }
+
+    public List<com.orchestrivo.domain.ProcessSpec> getSnapshotProcesses() {
+        if (inputSnapshot == null || inputSnapshot.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            java.lang.reflect.Type listType = new com.google.gson.reflect.TypeToken<List<com.orchestrivo.domain.ProcessSpec>>(){}.getType();
+            return new com.google.gson.Gson().fromJson(inputSnapshot, listType);
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    public String getFormattedParameters() {
+        if (algorithmParameters == null || algorithmParameters.trim().isEmpty()) {
+            return "Standard (Default parameters)";
+        }
+        try {
+            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){}.getType();
+            java.util.Map<String, Object> map = new com.google.gson.Gson().fromJson(algorithmParameters, type);
+            if (map == null || map.isEmpty()) {
+                return "Standard (Default parameters)";
+            }
+            List<String> parts = new ArrayList<>();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                String key = entry.getKey();
+                if ("quantum".equalsIgnoreCase(key)) {
+                    parts.add("Time Quantum: " + entry.getValue());
+                } else {
+                    parts.add(key + ": " + entry.getValue());
+                }
+            }
+            return String.join(", ", parts);
+        } catch (Exception e) {
+            return algorithmParameters;
+        }
+    }
+
+    public String getUserFacingErrorMessage() {
+        if (errorMessage == null || errorMessage.trim().isEmpty()) {
+            return null;
+        }
+        String msg = errorMessage.trim();
+        // Prevent leaking SQL, connection strings, passwords, or full traces
+        if (msg.contains("SQLException") || msg.contains("Hikari") || msg.contains("jdbc:") || msg.contains("password")) {
+            return "Execution failed due to a database processing error. The job may be retried.";
+        }
+        if (msg.contains("Exception:") || msg.contains("\tat ")) {
+            int idx = msg.indexOf("Exception:");
+            if (idx >= 0 && idx + 10 < msg.length()) {
+                String clean = msg.substring(idx + 10).split("\n")[0].trim();
+                return clean.isEmpty() ? "Execution failed due to an internal error." : clean;
+            }
+            return "Execution failed due to an internal calculation error.";
+        }
+        return msg;
     }
 
     public boolean isEligibleForRetry() {

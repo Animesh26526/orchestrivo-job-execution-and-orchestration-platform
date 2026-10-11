@@ -79,4 +79,18 @@ public class QueueMetrics {
     public int getTotalJobs() {
         return queuedCount + runningCount + completedCount + failedCount + cancelledCount;
     }
+
+    public String getFormattedAvgQueueWaitMs() {
+        if (avgQueueWaitMs <= 0) {
+            return "0.0 ms";
+        }
+        return String.format(java.util.Locale.US, "%.1f ms", avgQueueWaitMs);
+    }
+
+    public String getFormattedAvgExecutionDurationMs() {
+        if (avgExecutionDurationMs <= 0) {
+            return "0.0 ms";
+        }
+        return String.format(java.util.Locale.US, "%.1f ms", avgExecutionDurationMs);
+    }
 }
