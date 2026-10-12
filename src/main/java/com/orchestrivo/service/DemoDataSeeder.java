@@ -159,14 +159,36 @@ public class DemoDataSeeder {
             }
         }
 
-        // B. 4 FAILED jobs (Simulated edge failures)
-        for (int i = 0; i < 4; i++) {
+        // B. 4 FAILED jobs (2 via genuine production pipeline error handling, 2 explicitly labeled simulated fixtures)
+        for (int i = 0; i < 2; i++) {
             WorkloadRecord wr = createdWorkloads.get(i % createdWorkloads.size());
-            ExecutionJobRecord job = jobService.enqueueExperiment(wr, "ROUND_ROBIN", 3, demoUser.getId(), "seed-fail-" + i);
+            // Create a job with empty process snapshot to trigger genuine execution pipeline validation failure
+            ExecutionJobRecord emptySnapshotJob = new ExecutionJobRecord();
+            emptySnapshotJob.setOwnerUserId(demoUser.getId());
+            emptySnapshotJob.setWorkloadId(wr.getId());
+            emptySnapshotJob.setAlgorithmName("FCFS");
+            emptySnapshotJob.setInputSnapshot("[]");
+            emptySnapshotJob.setStatus(ExecutionJobStatus.QUEUED);
+            emptySnapshotJob.setAttemptCount(0);
+            emptySnapshotJob.setMaxAttempts(1); // Fails permanently on first attempt
+            emptySnapshotJob.setIdempotencyKey("seed-genuine-fail-" + i);
+            ExecutionJobRecord savedJob = jobRepo.save(emptySnapshotJob);
+
+            Optional<ExecutionJobRecord> claimed = jobRepo.claimNextQueuedJob("seed-worker");
+            if (claimed.isPresent()) {
+                // Execute through genuine workerManager production failure pipeline
+                workerManager.executeJob(claimed.get());
+                result.jobsFailed++;
+            }
+        }
+
+        for (int i = 0; i < 2; i++) {
+            WorkloadRecord wr = createdWorkloads.get(i % createdWorkloads.size());
+            ExecutionJobRecord job = jobService.enqueueExperiment(wr, "ROUND_ROBIN", 3, demoUser.getId(), "seed-sim-fail-" + i);
             Optional<ExecutionJobRecord> claimed = jobRepo.claimNextQueuedJob("seed-worker");
             if (claimed.isPresent()) {
                 jobRepo.markFailed(claimed.get().getId(), claimed.get().getClaimToken(),
-                        "Execution validation failed: process execution violated timeline invariant on attempt " + claimed.get().getAttemptCount(), false);
+                        "[Simulated Failure Fixture] Deterministic edge fixture: worker process terminated on attempt " + claimed.get().getAttemptCount(), false);
                 result.jobsFailed++;
             }
         }
@@ -174,8 +196,18 @@ public class DemoDataSeeder {
         // C. 3 CANCELLED jobs
         for (int i = 0; i < 3; i++) {
             WorkloadRecord wr = createdWorkloads.get(i % createdWorkloads.size());
-            ExecutionJobRecord job = jobService.enqueueExperiment(wr, "FCFS", 3, demoUser.getId(), "seed-cancel-" + i);
-            boolean cancelled = jobService.cancelJob(job.getId(), demoUser.getId());
+            ExecutionJobRecord job = new ExecutionJobRecord();
+            job.setOwnerUserId(demoUser.getId());
+            job.setWorkloadId(wr.getId());
+            job.setAlgorithmName("FCFS");
+            job.setAlgorithmParameters("{}");
+            job.setInputSnapshot(WorkloadSnapshot.serialize(wr.getWorkload(), wr.getGenerationSeed()));
+            job.setStatus(ExecutionJobStatus.QUEUED);
+            job.setAttemptCount(0);
+            job.setMaxAttempts(3);
+            job.setIdempotencyKey("seed-cancel-" + i);
+            ExecutionJobRecord saved = jobRepo.save(job);
+            boolean cancelled = jobService.cancelJob(saved.getId(), demoUser.getId());
             if (cancelled) {
                 result.jobsCancelled++;
             }
@@ -185,7 +217,21 @@ public class DemoDataSeeder {
         for (int i = 0; i < 3; i++) {
             WorkloadRecord wr = createdWorkloads.get(i % createdWorkloads.size());
             String algo = algorithms[(i + 1) % algorithms.length];
-            jobService.enqueueExperiment(wr, algo, 3, demoUser.getId(), "seed-queued-" + i);
+            ExecutionJobRecord qJob = new ExecutionJobRecord();
+            qJob.setOwnerUserId(demoUser.getId());
+            qJob.setWorkloadId(wr.getId());
+            qJob.setAlgorithmName(algo);
+            Map<String, Object> params = new HashMap<>();
+            if ("ROUND_ROBIN".equalsIgnoreCase(algo)) {
+                params.put("quantum", 3);
+            }
+            qJob.setAlgorithmParameters(new com.google.gson.Gson().toJson(params));
+            qJob.setInputSnapshot(WorkloadSnapshot.serialize(wr.getWorkload(), wr.getGenerationSeed()));
+            qJob.setStatus(ExecutionJobStatus.QUEUED);
+            qJob.setAttemptCount(0);
+            qJob.setMaxAttempts(3);
+            qJob.setIdempotencyKey("seed-queued-" + i);
+            jobRepo.save(qJob);
             result.jobsQueued++;
         }
 

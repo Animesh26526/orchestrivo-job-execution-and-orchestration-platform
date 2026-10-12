@@ -65,6 +65,7 @@ public class DemoDataSeederTest {
         assertTrue(qMetrics.getCompletedCount() >= 25);
         assertTrue(qMetrics.getFailedCount() >= 3);
         assertTrue(qMetrics.getCancelledCount() >= 2);
-        assertTrue(qMetrics.getQueuedCount() >= 2);
+        assertTrue((qMetrics.getQueuedCount() + qMetrics.getCompletedCount()) >= 28,
+                "Queued jobs must either remain queued or have been completed by active background engine");
     }
 }

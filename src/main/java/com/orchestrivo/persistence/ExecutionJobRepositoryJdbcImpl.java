@@ -301,24 +301,21 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean renewLease(long jobId, String claimToken, int durationSeconds) {
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
+        }
         int safeDuration = Math.max(5, durationSeconds);
         String sql = "UPDATE execution_jobs " +
                 "SET lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND) " +
-                "WHERE id = ? AND status = 'RUNNING' AND (? IS NULL OR claim_token = ? OR claim_token IS NULL)";
+                "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setInt(1, safeDuration);
             ps.setLong(2, jobId);
-            if (claimToken != null) {
-                ps.setString(3, claimToken);
-                ps.setString(4, claimToken);
-            } else {
-                ps.setNull(3, Types.VARCHAR);
-                ps.setNull(4, Types.VARCHAR);
-            }
-            return ps.executeUpdate() > 0;
+            ps.setString(3, claimToken.trim());
+            return ps.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new RuntimeException("Error renewing job lease for job: " + jobId, e);
         }
@@ -326,19 +323,19 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean markCompleted(long jobId, long experimentRunId, long durationMs) {
-        return markCompleted(jobId, null, experimentRunId, durationMs);
+        // Strict fencing requires the active attempt claim token; unfenced completions are rejected.
+        return false;
     }
 
     @Override
     public boolean markCompleted(long jobId, String claimToken, long experimentRunId, long durationMs) {
-        String whereClause = (claimToken != null)
-                ? "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?"
-                : "WHERE id = ? AND status = 'RUNNING'";
-
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
+        }
         String sql = "UPDATE execution_jobs " +
                 "SET status = 'COMPLETED', experiment_run_id = ?, execution_duration_ms = ?, " +
                 "completed_at = NOW(), claimed_by = NULL, claim_token = NULL, lease_expires_at = NULL " +
-                whereClause;
+                "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -346,10 +343,8 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
             ps.setLong(1, experimentRunId);
             ps.setLong(2, durationMs);
             ps.setLong(3, jobId);
-            if (claimToken != null) {
-                ps.setString(4, claimToken);
-            }
-            return ps.executeUpdate() > 0;
+            ps.setString(4, claimToken.trim());
+            return ps.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new RuntimeException("Error marking job completed: " + jobId, e);
         }
@@ -357,37 +352,33 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean markFailed(long jobId, String errorMessage, boolean willRetry) {
-        return markFailed(jobId, null, errorMessage, willRetry);
+        // Strict fencing requires the active attempt claim token; unfenced failure transitions are rejected.
+        return false;
     }
 
     @Override
     public boolean markFailed(long jobId, String claimToken, String errorMessage, boolean willRetry) {
-        String whereClause = (claimToken != null)
-                ? "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?"
-                : "WHERE id = ?";
-
-        String sql;
-        if (willRetry) {
-            sql = "UPDATE execution_jobs " +
-                    "SET status = 'QUEUED', error_message = ?, claimed_by = NULL, claimed_at = NULL, " +
-                    "claim_token = NULL, lease_expires_at = NULL " +
-                    whereClause;
-        } else {
-            sql = "UPDATE execution_jobs " +
-                    "SET status = 'FAILED', error_message = ?, completed_at = NOW(), claimed_by = NULL, " +
-                    "claim_token = NULL, lease_expires_at = NULL " +
-                    whereClause;
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
         }
+        String sql = willRetry
+                ? "UPDATE execution_jobs " +
+                  "SET status = CASE WHEN attempt_count < max_attempts THEN 'QUEUED' ELSE 'FAILED' END, " +
+                  "error_message = ?, claimed_by = NULL, claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL, " +
+                  "completed_at = CASE WHEN attempt_count < max_attempts THEN NULL ELSE NOW() END " +
+                  "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?"
+                : "UPDATE execution_jobs " +
+                  "SET status = 'FAILED', error_message = ?, completed_at = NOW(), claimed_by = NULL, " +
+                  "claim_token = NULL, lease_expires_at = NULL " +
+                  "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, errorMessage);
             ps.setLong(2, jobId);
-            if (claimToken != null) {
-                ps.setString(3, claimToken);
-            }
-            return ps.executeUpdate() > 0;
+            ps.setString(3, claimToken.trim());
+            return ps.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new RuntimeException("Error marking job failed: " + jobId, e);
         }
@@ -400,6 +391,9 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs, long durationNanos) {
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
+        }
         String checkAndLockSql = "SELECT status, claim_token FROM execution_jobs WHERE id = ? FOR UPDATE";
         String insertRunSql = "INSERT INTO experiment_runs " +
                 "(owner_user_id, workload_id, algorithm_name, algorithm_parameters, input_snapshot, run_status, " +
@@ -409,14 +403,14 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
         String updateJobSql = "UPDATE execution_jobs " +
                 "SET status = 'COMPLETED', experiment_run_id = ?, execution_duration_ms = ?, execution_duration_nanos = ?, " +
                 "completed_at = NOW(), claimed_by = NULL, claim_token = NULL, lease_expires_at = NULL " +
-                "WHERE id = ? AND status = 'RUNNING' AND (? IS NULL OR claim_token = ? OR claim_token IS NULL)";
+                "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         Connection conn = null;
         try {
             conn = dataSource.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Verify job is still RUNNING and owned by claimToken
+            // 1. Verify job is still RUNNING and owned by exact non-null claimToken
             try (PreparedStatement psCheck = conn.prepareStatement(checkAndLockSql)) {
                 psCheck.setLong(1, jobId);
                 try (ResultSet rs = psCheck.executeQuery()) {
@@ -426,11 +420,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                     }
                     String currentStatus = rs.getString("status");
                     String currentToken = rs.getString("claim_token");
-                    if (!"RUNNING".equalsIgnoreCase(currentStatus)) {
-                        conn.rollback();
-                        return false;
-                    }
-                    if (claimToken != null && currentToken != null && !claimToken.equals(currentToken)) {
+                    if (!"RUNNING".equalsIgnoreCase(currentStatus) || currentToken == null || !claimToken.trim().equals(currentToken)) {
                         conn.rollback();
                         return false;
                     }
@@ -525,13 +515,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                 psUpdate.setLong(2, durationMs);
                 psUpdate.setLong(3, durationNanos);
                 psUpdate.setLong(4, jobId);
-                if (claimToken != null) {
-                    psUpdate.setString(5, claimToken);
-                    psUpdate.setString(6, claimToken);
-                } else {
-                    psUpdate.setNull(5, Types.VARCHAR);
-                    psUpdate.setNull(6, Types.VARCHAR);
-                }
+                psUpdate.setString(5, claimToken.trim());
                 int updated = psUpdate.executeUpdate();
                 if (updated == 1) {
                     conn.commit();

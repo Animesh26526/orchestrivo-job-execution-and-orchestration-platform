@@ -215,7 +215,16 @@ public class ExecutionJobRepositoryJdbcImplTest {
         Optional<ExecutionJobRecord> claimed = jobRepository.claimNextQueuedJob("worker-test");
         assertTrue(claimed.isPresent());
 
-        boolean ok = jobRepository.markCompleted(job.getId(), savedRun.getId(), 15L);
+        // Unfenced completion without claim token must be rejected
+        boolean unfencedRejected = jobRepository.markCompleted(job.getId(), savedRun.getId(), 15L);
+        assertFalse(unfencedRejected, "Unfenced completion must be rejected by fencing");
+
+        // Completion with wrong claim token must be rejected
+        boolean wrongTokenRejected = jobRepository.markCompleted(job.getId(), "wrong-token-123", savedRun.getId(), 15L);
+        assertFalse(wrongTokenRejected, "Completion with incorrect token must be rejected");
+
+        // Fenced completion with correct token succeeds
+        boolean ok = jobRepository.markCompleted(job.getId(), claimed.get().getClaimToken(), savedRun.getId(), 15L);
         assertTrue(ok);
 
         Optional<ExecutionJobRecord> updated = jobRepository.findById(job.getId());
@@ -252,8 +261,13 @@ public class ExecutionJobRepositoryJdbcImplTest {
     void testRetryFlow() {
         ExecutionJobRecord job = createSampleJob("FCFS", null);
 
-        // Mark failed (attempt 1)
-        jobRepository.markFailed(job.getId(), "Transient DB timeout", false);
+        // Claim job
+        Optional<ExecutionJobRecord> claimed = jobRepository.claimNextQueuedJob("retry-worker");
+        assertTrue(claimed.isPresent());
+
+        // Mark failed with token (attempt 1)
+        boolean failOk = jobRepository.markFailed(job.getId(), claimed.get().getClaimToken(), "Transient DB timeout", false);
+        assertTrue(failOk);
 
         Optional<ExecutionJobRecord> failedOpt = jobRepository.findById(job.getId());
         assertTrue(failedOpt.isPresent());
