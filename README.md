@@ -26,7 +26,16 @@ Built as a transparent, zero-magic modular monolith (no Spring, no Hibernate/JPA
 
 ## Baseline vs. Candidate: What Improved?
 
-Orchestrivo features a canonical, durably pinned A/B micro-benchmark comparison directly within its dashboard (`system_settings` keys `featured_baseline_run_id` and `featured_candidate_run_id`). The comparison evaluates the systems impact of algorithmic quantum slicing in preemptive **Round Robin** scheduling under high-density concurrency:
+Orchestrivo evaluates systems performance and scalability across two distinct, evidence-backed benchmark tiers:
+
+1. **Database-Backed Queue Orchestration & Worker Scaling**: Measures end-to-end asynchronous job claiming, event-driven reactive polling, MySQL 8 `SKIP LOCKED` concurrency, composite indexing, and bounded worker pool scaling ($1\text{--}8$ workers). Tested using genuine historical Git worktrees: baseline `eb15e4b` vs. candidate `7504860`.
+   * **Highlight**: Single-worker drain latency dropped by **-95.66%** ($19,672.69\text{ ms} \to 854.42\text{ ms}$, **23.02x speedup**), with throughput expanding **+2,195.10%** ($1.02 \to 23.41\text{ jobs/s}$).
+2. **In-Memory Algorithmic Micro-Benchmarks**: Measures CPU scheduling algorithm runtime, CPU cache effects, and quantum slicing overhead under controlled, deterministic workloads.
+   * **Highlight**: Pinned Round Robin quantum comparison ($q=3$ vs. $q=6$) yields **1.47x speedup**, **-32.13% latency reduction**, and **+65.11% batch throughput**.
+
+### Algorithmic Micro-Benchmark: Round Robin Quantum Slicing ($q=3$ vs. $q=6$)
+
+Durably pinned within the dashboard (`system_settings` keys `featured_baseline_run_id` and `featured_candidate_run_id`):
 
 - **Baseline (Run #77)**: `ROUND_ROBIN` ($q=3$), 50 processes ($N=50$, deterministic seed: 42)
 - **Candidate (Run #78)**: `ROUND_ROBIN` ($q=6$), 50 processes ($N=50$, deterministic seed: 42)
@@ -66,6 +75,10 @@ RESULT: 1.47x Speedup  |  -32.13% Execution Latency  |  +65.11% Actual Batch Thr
 
 | Engineering Area | Baseline / Former Behavior | Candidate / Released Behavior | Systems Impact & Empirical Gain |
 |---|---|---|---|
+| **Queue Claiming & Locking** | Unfenced 20-candidate scan (`SELECT id FROM execution_jobs WHERE status = 'QUEUED' LIMIT 20`), optimistic update, and redundant `findById()` query. | Atomic single-roundtrip `SELECT ... FOR UPDATE SKIP LOCKED USE INDEX (idx_jobs_status_id)` with claim-token fencing and deadlock retry. | **23.02x single-worker speedup**; eliminates worker row collisions, lock waits, and redundant roundtrips. |
+| **Worker Dispatch Latency** | Fixed 1,000 ms polling delay with no reactive wakeup on job completion or enqueue; workers idled between tasks. | Reactive event-driven notification (`triggerImmediatePoll()`) in worker `finally` block and on batch submission. | Single-worker drain latency reduced by **-95.66%** ($19,672\text{ ms} \to 854\text{ ms}$); throughput gained **+2,195.10%**. |
+| **Queue Query Indexing** | Full table `filesort` scanning on `(status, created_at)` when ordering by `id ASC`. | Flyway migration `V8__queue_performance_indexes.sql` creating composite index `idx_jobs_status_id (status, id)`. | Zero `filesort` operations on candidate selection; direct index range scan. |
+| **Batch Job Ingestion** | $N$ individual single-row inserts on separate connections inside tight loop. | Atomic JDBC batch insert `saveAll()` using `PreparedStatement.executeBatch()` and generated keys. | Enqueue latency reduced from $N$ roundtrips to 1 connection transaction. |
 | **Job Claim Fencing** | Loose SQL condition `(? IS NULL OR claim_token = ? OR claim_token IS NULL)` allowed unfenced lease renewal. | Strict token enforcement: non-null token matching `claim_token = ? AND status = 'RUNNING'`. Unfenced calls rejected. | Zero zombie worker overwrites. State safety mathematically guaranteed under concurrent races. |
 | **Completion Atomicity** | Job completion and experiment persistence were non-atomic; failed job completion left orphaned results. | Explicit JDBC transaction with row-level `FOR UPDATE` lock. Affected row count check rolls back on mismatch. | Zero duplicate experiment runs. Atomicity enforced across job state and result persistence. |
 | **Throughput Measurement** | Theoretical reciprocal latency ($1/P_{50}$) was cited as actual system throughput. | Dual reporting: Actual Batch Throughput ($R_{batch} = N_{valid} / \Delta t_{batch}$) vs. Latency-Derived Estimate ($R_{est} = 1/P_{50}$). | Exposes realistic memory allocation, CPU cache evictions, and OS jitter ($R_{batch} \approx 51\%$ of theoretical). |
@@ -78,16 +91,18 @@ RESULT: 1.47x Speedup  |  -32.13% Execution Latency  |  +65.11% Actual Batch Thr
 
 ## Queue Orchestration Performance & Worker Scaling
 
-In addition to pure algorithmic micro-benchmarks, Orchestrivo features an empirical, database-backed queue orchestration pipeline. We established an untouched baseline on commit `eb15e4b`, profiled database query patterns, and implemented 4 focused systems optimizations:
+In addition to pure algorithmic micro-benchmarks, Orchestrivo features an empirical, database-backed queue orchestration pipeline. We independently checked out and executed the historical baseline commit (`eb15e4bdbff9aed151eea150b1bc0274ae856498`) and candidate commit (`750486053b3c8024bd406cac587073252ad70b05`) in isolated Git worktrees under identical hardware, MySQL 8.0, and JVM conditions.
+
+Four targeted systems optimizations were validated:
 
 1. **MySQL 8 Atomic `SKIP LOCKED` Claiming**: Replaced un-locked candidate scanning and redundant `findById()` lookups with an atomic `SELECT ... FOR UPDATE SKIP LOCKED` inside `READ COMMITTED` transactions with deadlock resilience, eliminating worker collisions and row-locking contention.
-2. **Event-Driven Reactive Polling**: Replaced fixed 1,000 ms idle polling delays with an immediate listener callback (`triggerImmediatePoll()`) on worker completion, dropping idle latency to microseconds.
+2. **Event-Driven Reactive Polling**: Replaced fixed 1,000 ms idle polling delays with an immediate listener callback (`triggerImmediatePoll()`) on worker completion and batch enqueue, dropping idle latency to microseconds.
 3. **Queue Status Composite Indexing**: Deployed Flyway migration `V8__queue_performance_indexes.sql` creating `idx_jobs_status_id (status, id)` on `execution_jobs`, eliminating `Using filesort` and full-table scans.
 4. **JDBC Batch Enqueueing**: Implemented `saveAll(List<ExecutionJobRecord>)` using JDBC `executeBatch()` and generated keys, accelerating batch job ingestion.
 
 ### Empirical Before/After Comparison
 
-Measured under identical environment conditions (Java 17, MySQL 8.0.44 Community, Windows 11 x64, HikariCP pool = 10, identical 20-job workload cohort):
+Measured under identical environment conditions (Java 17, MySQL 8.0.44 Community, Windows 11 x64, HikariCP pool = 10, identical 20-job workload cohort across 1 warmup and 3 measured trials):
 
 | Worker Count | Workload Cohort | Baseline Median Drain (ms) | Candidate Median Drain (ms) | Drain Latency Delta (%) | Baseline Throughput (jobs/s) | Candidate Throughput (jobs/s) | Throughput Gain (%) | Speedup Factor |
 |---|---|---|---|---|---|---|---|---|
@@ -224,6 +239,11 @@ Execute baseline and candidate queue benchmarks on demand:
 ```cmd
 .\mvnw.cmd test -Dtest=BaselineBenchmarkRunnerTest -DexcludedGroups=none
 .\mvnw.cmd test -Dtest=CandidateBenchmarkRunnerTest -DexcludedGroups=none
+```
+
+Regenerate comparison matrix from raw JSON benchmark results:
+```cmd
+.\mvnw.cmd test-compile exec:java -Dexec.mainClass="com.orchestrivo.benchmark.ComparisonMatrixGenerator" -Dexec.classpathScope="test"
 ```
 
 Assemble the WAR package:
