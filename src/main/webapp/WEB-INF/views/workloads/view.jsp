@@ -29,7 +29,7 @@
         <div class="page-actions">
             <a href="<%= request.getContextPath() %>/workloads" class="btn btn-secondary">&larr; Back to Workloads</a>
             <a href="<%= request.getContextPath() %>/jobs/batch?workloadId=${workload.id}" class="btn btn-primary">&boxplus; Batch Run Algorithms</a>
-            <a href="<%= request.getContextPath() %>/experiments/new?workloadId=${workload.id}" class="btn btn-secondary">Run Single Algorithm</a>
+            <a href="#runSimulationCard" class="btn btn-secondary">Run Single Algorithm &darr;</a>
             <a href="<%= request.getContextPath() %>/workloads/edit?id=${workload.id}" class="btn btn-secondary">Edit Workload</a>
             <a href="<%= request.getContextPath() %>/workloads/export?id=${workload.id}" class="btn btn-outline">Export CSV</a>
         </div>
@@ -113,7 +113,7 @@
         </div>
 
         <!-- Launch Simulation Card -->
-        <div class="card" style="margin-bottom: 0;">
+        <div class="card" id="runSimulationCard" style="margin-bottom: 0;">
             <div class="card-header">
                 <div>
                     <h2 class="card-title">Run Scheduling Experiment</h2>

@@ -55,9 +55,25 @@
             btn.textContent = 'Show';
         }
     }
+    function fillDemoCredentials() {
+        document.getElementById('emailInput').value = 'demo@orchestrivo.io';
+        document.getElementById('passwordInput').value = 'Demo@12345';
+    }
     </script>
 
-    <div class="auth-footer">
+    <div style="margin-top: 18px; padding: 12px 14px; background: rgba(56, 189, 248, 0.05); border: 1px dashed rgba(56, 189, 248, 0.3); border-radius: var(--radius-sm); font-size: 12px; text-align: left;">
+        <div style="font-weight: 600; color: var(--color-accent); margin-bottom: 4px;">🚀 Quick Demo Access</div>
+        <div style="color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 8px;">
+            Email: <code style="color: var(--color-text-primary); background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px;">demo@orchestrivo.io</code><br/>
+            Password: <code style="color: var(--color-text-primary); background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px;">Demo@12345</code>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoCredentials()">Autofill Demo</button>
+            <a href="<%= request.getContextPath() %>/demo" class="btn btn-secondary btn-sm">Seeder Control</a>
+        </div>
+    </div>
+
+    <div class="auth-footer" style="margin-top: 16px;">
         Don't have an account? <a href="<%= request.getContextPath() %>/register">Create Account</a>
     </div>
 </div>

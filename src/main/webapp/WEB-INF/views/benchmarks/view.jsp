@@ -71,6 +71,12 @@
                         <td style="font-weight: 600;">Algorithm:</td>
                         <td><strong><c:out value="${benchmark.algorithmName}"/></strong></td>
                     </tr>
+                    <c:if test="${benchmark.quantum > 0}">
+                    <tr>
+                        <td style="font-weight: 600;">Time Quantum (q):</td>
+                        <td>${benchmark.quantum} time units</td>
+                    </tr>
+                    </c:if>
                     <tr>
                         <td style="font-weight: 600;">Process Count:</td>
                         <td>${benchmark.processCount} processes</td>
@@ -81,7 +87,15 @@
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Protocol Iterations:</td>
-                        <td>${benchmark.warmupIterations} warm-up cycles &bull; ${benchmark.measuredIterations} measured repetitions</td>
+                        <td>${benchmark.warmupIterations} warm-up cycles &bull; ${benchmark.measuredIterations} measured repetitions (${benchmark.validRunCount} valid)</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Actual Batch Throughput:</td>
+                        <td><strong>${String.format('%.1f', benchmark.actualBatchThroughput)} runs/sec</strong> (Measured: ${benchmark.validRunCount} runs in ${benchmark.formattedBatchElapsed})</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Latency-Derived Throughput (Est.):</td>
+                        <td>${String.format('%.1f', benchmark.latencyDerivedThroughputEstimate)} runs/sec <small style="color: var(--color-slate-500);">(Theoretical reciprocal: 1 / P50)</small></td>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Execution Timestamp:</td>

@@ -21,6 +21,9 @@ public class BenchmarkRunRecord {
     private String environmentInfo;
     private String runType = "STANDARD";
     private String benchmarkGroup;
+    private long batchElapsedNanos;
+    private int validRunCount;
+    private Integer quantum;
     private LocalDateTime createdAt;
     private List<BenchmarkMeasurement> measurements = new ArrayList<>();
 
@@ -64,8 +67,55 @@ public class BenchmarkRunRecord {
         this.measurements = measurements != null ? new ArrayList<>(measurements) : new ArrayList<>();
     }
 
-    public double getThroughputPerSecond() {
+    public long getBatchElapsedNanos() { return batchElapsedNanos; }
+    public void setBatchElapsedNanos(long batchElapsedNanos) { this.batchElapsedNanos = batchElapsedNanos; }
+    public int getValidRunCount() { return validRunCount; }
+    public void setValidRunCount(int validRunCount) { this.validRunCount = validRunCount; }
+    public Integer getQuantum() { return quantum; }
+    public void setQuantum(Integer quantum) { this.quantum = quantum; }
+
+    public double getBatchElapsedMillis() { return batchElapsedNanos / 1_000_000.0; }
+    public double getBatchElapsedSeconds() { return batchElapsedNanos / 1_000_000_000.0; }
+    public String getFormattedBatchElapsed() {
+        if (batchElapsedNanos <= 0) {
+            return "N/A";
+        }
+        double ms = batchElapsedNanos / 1_000_000.0;
+        if (ms < 1000.0) {
+            return String.format(java.util.Locale.US, "%.2f ms", ms);
+        }
+        return String.format(java.util.Locale.US, "%.3f s", ms / 1000.0);
+    }
+
+    /**
+     * Measures actual host benchmark throughput as successfully completed runs per elapsed wall-clock second of the measured batch.
+     */
+    public double getActualBatchThroughput() {
+        if (batchElapsedNanos > 0 && validRunCount > 0) {
+            return ((double) validRunCount * 1_000_000_000.0) / (double) batchElapsedNanos;
+        }
+        if (measurements != null && !measurements.isEmpty()) {
+            long total = 0;
+            for (BenchmarkMeasurement m : measurements) total += m.getDurationNanos();
+            if (total > 0) {
+                return ((double) measurements.size() * 1_000_000_000.0) / (double) total;
+            }
+        }
+        return getLatencyDerivedThroughputEstimate();
+    }
+
+    /**
+     * Reciprocal of median latency (1 / median), clearly labeled as an estimate rather than independently measured throughput.
+     */
+    public double getLatencyDerivedThroughputEstimate() {
         return medianNanos > 0 ? (1_000_000_000.0 / medianNanos) : 0.0;
+    }
+
+    /**
+     * Backward-compatible throughput accessor returning the actual batch throughput.
+     */
+    public double getThroughputPerSecond() {
+        return getActualBatchThroughput();
     }
 
     public double getMedianMicros() { return medianNanos / 1_000.0; }

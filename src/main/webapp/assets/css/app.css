@@ -127,6 +127,13 @@ body {
   align-items: center;
   gap: 4px;
   list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-item {
+  position: relative;
+  list-style: none;
 }
 
 .nav-link {
@@ -140,22 +147,123 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.nav-link:hover {
+.nav-link:hover,
+.nav-link:focus-visible {
   background-color: rgba(255, 255, 255, 0.08);
   color: var(--color-white);
+  outline: none;
 }
 
+.nav-item.active > .nav-link,
 .nav-link.active {
   background-color: var(--color-primary);
   color: var(--color-white);
+}
+
+.nav-chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  display: inline-block;
+  opacity: 0.75;
+}
+
+.has-dropdown.open > .dropdown-toggle .nav-chevron {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  background: #ffffff;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 6px 0;
+  z-index: 1050;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+.has-dropdown.open > .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-menu-end {
+  left: auto;
+  right: 0;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-slate-700);
+  text-decoration: none;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s ease, color 0.1s ease;
+  box-sizing: border-box;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+  background: var(--color-slate-100);
+  color: var(--color-primary-600);
+  outline: none;
+}
+
+.dropdown-item.logout-item {
+  color: #b91c1c;
+}
+
+.dropdown-item.logout-item:hover,
+.dropdown-item.logout-item:focus-visible {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.dropdown-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--color-slate-200);
+}
+
+.dropdown-header {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--color-slate-500);
+  line-height: 1.4;
 }
 
 .nav-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.nav-account-dropdown {
+  position: relative;
+}
+
+.user-toggle-btn {
+  padding: 4px 8px;
 }
 
 .nav-user {
@@ -177,6 +285,26 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nav-mobile-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 28px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hamburger-bar {
+  width: 100%;
+  height: 3px;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: all 0.2s ease;
 }
 
 .nav-logout-btn {
@@ -912,14 +1040,49 @@ body {
 
 @media (max-width: 768px) {
   .nav-inner {
-    flex-direction: column;
+    flex-wrap: wrap;
     height: auto;
-    padding: 12px 20px;
-    gap: 12px;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  .nav-mobile-toggle {
+    display: flex;
+  }
+  .nav-menu {
+    display: none;
+    width: 100%;
+    order: 3;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-slate-800);
+  }
+  .nav-menu.open {
+    display: block;
   }
   .nav-links {
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+  }
+  .dropdown-menu {
+    position: static;
+    box-shadow: none;
+    border: 1px solid var(--color-slate-700);
+    background: var(--color-slate-900);
+    margin-top: 4px;
+    padding: 4px 0;
+  }
+  .dropdown-item {
+    color: var(--color-slate-300);
+    padding: 8px 20px;
+  }
+  .dropdown-item:hover,
+  .dropdown-item:focus-visible {
+    background: var(--color-slate-800);
+    color: var(--color-white);
+  }
+  .nav-actions {
+    margin-left: auto;
   }
   .form-grid-2, .form-grid-3 {
     grid-template-columns: 1fr;

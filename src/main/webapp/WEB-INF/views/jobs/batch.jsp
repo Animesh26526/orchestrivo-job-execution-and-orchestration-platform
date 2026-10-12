@@ -145,7 +145,7 @@
                     <option value="" disabled ${empty selectedWorkload and empty selectedWorkloadId ? 'selected' : ''}>-- Choose a workload --</option>
                     <c:forEach var="w" items="${workloads}">
                         <option value="${w.id}" ${(selectedWorkload != null && selectedWorkload.id == w.id) || (selectedWorkloadId != null && selectedWorkloadId == w.id) ? 'selected' : ''}>
-                            <c:out value="${w.name}"/> (${w.processCount} processes, <c:out value="${w.sourceType}"/>)
+                            <c:out value="${w.name}"/> (<c:out value="${w.processCount}"/> processes, <c:out value="${w.sourceType}"/>)
                         </option>
                     </c:forEach>
                 </select>

@@ -6,6 +6,7 @@ public class QueueMetrics {
     private int completedCount;
     private int failedCount;
     private int cancelledCount;
+    private int deadLetterCount;
     private double avgQueueWaitMs;
     private double avgExecutionDurationMs;
     private long oldestQueuedAgeSeconds;
@@ -50,6 +51,14 @@ public class QueueMetrics {
 
     public void setCancelledCount(int cancelledCount) {
         this.cancelledCount = cancelledCount;
+    }
+
+    public int getDeadLetterCount() {
+        return deadLetterCount;
+    }
+
+    public void setDeadLetterCount(int deadLetterCount) {
+        this.deadLetterCount = deadLetterCount;
     }
 
     public double getAvgQueueWaitMs() {

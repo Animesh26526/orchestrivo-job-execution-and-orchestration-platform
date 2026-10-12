@@ -13,7 +13,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-@WebServlet({"/benchmarks", "/benchmarks/run", "/benchmarks/view", "/benchmarks/compare", "/benchmarks/delete"})
+@WebServlet({"/benchmarks", "/benchmarks/run", "/benchmarks/view", "/benchmarks/compare", "/benchmarks/delete", "/benchmarks/feature", "/benchmarks/guide"})
 public class BenchmarkServlet extends HttpServlet {
 
     @Override
@@ -21,7 +21,9 @@ public class BenchmarkServlet extends HttpServlet {
         String path = req.getServletPath();
         User user = (User) req.getSession().getAttribute("user");
 
-        if ("/benchmarks/run".equals(path)) {
+        if ("/benchmarks/guide".equals(path)) {
+            req.getRequestDispatcher("/WEB-INF/views/benchmarks/guide.jsp").forward(req, resp);
+        } else if ("/benchmarks/run".equals(path)) {
             req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
             req.getRequestDispatcher("/WEB-INF/views/benchmarks/new.jsp").forward(req, resp);
         } else if ("/benchmarks/view".equals(path)) {
@@ -76,6 +78,8 @@ public class BenchmarkServlet extends HttpServlet {
             handleRunPost(req, resp, user);
         } else if ("/benchmarks/delete".equals(path)) {
             handleDeletePost(req, resp, user);
+        } else if ("/benchmarks/feature".equals(path)) {
+            handleFeaturePost(req, resp, user);
         }
     }
 
@@ -206,11 +210,18 @@ public class BenchmarkServlet extends HttpServlet {
         String candParam = req.getParameter("candidateId");
 
         if (baseParam == null || candParam == null || baseParam.trim().isEmpty() || candParam.trim().isEmpty()) {
-            PagedResult<BenchmarkRunRecord> all = ServiceRegistry.benchmarkService.getBenchmarksPaged(user.getId(), 1, 100);
-            req.setAttribute("benchmarks", all.getItems());
-            req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
-            req.getRequestDispatcher("/WEB-INF/views/benchmarks/compare.jsp").forward(req, resp);
-            return;
+            java.util.Optional<com.orchestrivo.model.BenchmarkComparisonResult> featuredOpt = ServiceRegistry.benchmarkService.getFeaturedComparison();
+            if (featuredOpt.isPresent()) {
+                com.orchestrivo.model.BenchmarkComparisonResult featured = featuredOpt.get();
+                baseParam = String.valueOf(featured.getBaseline().getId());
+                candParam = String.valueOf(featured.getCandidate().getId());
+            } else {
+                PagedResult<BenchmarkRunRecord> all = ServiceRegistry.benchmarkService.getBenchmarksPaged(user.getId(), 1, 100);
+                req.setAttribute("benchmarks", all.getItems());
+                req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
+                req.getRequestDispatcher("/WEB-INF/views/benchmarks/compare.jsp").forward(req, resp);
+                return;
+            }
         }
 
         try {
@@ -225,6 +236,10 @@ public class BenchmarkServlet extends HttpServlet {
                 resp.setHeader("Content-Disposition", "attachment; filename=\"benchmark-comparison-" + baselineId + "-vs-" + candidateId + ".csv\"");
                 java.io.PrintWriter writer = resp.getWriter();
                 writer.println("Metric,Baseline (Run #" + baselineId + "),Candidate (Run #" + candidateId + "),Absolute Delta,Percentage Delta");
+                writer.printf(java.util.Locale.US, "Controlled Match Status,%s,%s,%s,%s\n",
+                        comparison.isControlledMatch() ? "Identical Match" : "Variant",
+                        comparison.isControlledMatch() ? "Identical Match" : "Variant",
+                        "N/A", "N/A");
                 writer.printf(java.util.Locale.US, "Median Duration (µs),%.3f,%.3f,%.3f,%.2f%%\n",
                         comparison.getBaseline().getMedianMicros(), comparison.getCandidate().getMedianMicros(),
                         comparison.getDeltaMedianNanos() / 1000.0, comparison.getDeltaMedianPct());
@@ -240,16 +255,22 @@ public class BenchmarkServlet extends HttpServlet {
                 writer.printf(java.util.Locale.US, "Std Deviation (µs),%.3f,%.3f,%.3f,%.2f%%\n",
                         comparison.getBaseline().getStdDevMicros(), comparison.getCandidate().getStdDevMicros(),
                         comparison.getDeltaStdDevNanos() / 1000.0, comparison.getDeltaStdDevPct());
-                writer.printf(java.util.Locale.US, "Throughput (runs/sec),%.1f,%.1f,%.1f,%.2f%%\n",
-                        comparison.getBaselineThroughput(), comparison.getCandidateThroughput(),
-                        comparison.getCandidateThroughput() - comparison.getBaselineThroughput(), comparison.getDeltaThroughputPct());
+                writer.printf(java.util.Locale.US, "Actual Batch Throughput (runs/sec),%.1f,%.1f,%.1f,%.2f%%\n",
+                        comparison.getBaselineActualBatchThroughput(), comparison.getCandidateActualBatchThroughput(),
+                        comparison.getDeltaActualBatchThroughput(), comparison.getDeltaActualBatchThroughputPct());
+                writer.printf(java.util.Locale.US, "Latency-derived Throughput Estimate (runs/sec),%.1f,%.1f,%.1f,%.2f%%\n",
+                        comparison.getBaselineLatencyDerivedThroughputEstimate(), comparison.getCandidateLatencyDerivedThroughputEstimate(),
+                        comparison.getCandidateLatencyDerivedThroughputEstimate() - comparison.getBaselineLatencyDerivedThroughputEstimate(),
+                        comparison.getDeltaLatencyDerivedThroughputEstimatePct());
                 writer.printf(java.util.Locale.US, "Speedup Factor,1.0x,%.2fx,N/A,N/A\n",
                         comparison.getSpeedupFactor());
                 writer.flush();
                 return;
             }
 
+            boolean isFeatured = ServiceRegistry.benchmarkService.isFeaturedPair(baselineId, candidateId);
             req.setAttribute("comparison", comparison);
+            req.setAttribute("isFeatured", isFeatured);
             req.getRequestDispatcher("/WEB-INF/views/benchmarks/compare.jsp").forward(req, resp);
 
         } catch (NumberFormatException e) {
@@ -258,6 +279,38 @@ public class BenchmarkServlet extends HttpServlet {
             resp.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
         } catch (SecurityException e) {
             resp.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
+        }
+    }
+
+    private void handleFeaturePost(HttpServletRequest req, HttpServletResponse resp, User user) throws IOException {
+        String action = req.getParameter("action");
+        String baseParam = req.getParameter("baselineId");
+        String candParam = req.getParameter("candidateId");
+
+        if ("unpin".equalsIgnoreCase(action)) {
+            ServiceRegistry.benchmarkService.clearFeaturedComparison();
+            if (ServiceRegistry.auditService != null) {
+                ServiceRegistry.auditService.log(user.getId(), "BENCHMARK_UNPIN", "BENCHMARK_COMPARISON", "global", Collections.emptyMap());
+            }
+        } else if ("pin".equalsIgnoreCase(action) && baseParam != null && candParam != null) {
+            try {
+                long baselineId = Long.parseLong(baseParam.trim());
+                long candidateId = Long.parseLong(candParam.trim());
+                ServiceRegistry.benchmarkService.setFeaturedComparison(baselineId, candidateId);
+                if (ServiceRegistry.auditService != null) {
+                    ServiceRegistry.auditService.log(user.getId(), "BENCHMARK_PIN", "BENCHMARK_COMPARISON", baselineId + ":" + candidateId,
+                            Map.of("baselineId", baselineId, "candidateId", candidateId));
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String redirect = req.getParameter("redirect");
+        if (redirect != null && !redirect.trim().isEmpty()) {
+            resp.sendRedirect(req.getContextPath() + redirect);
+        } else if (baseParam != null && candParam != null) {
+            resp.sendRedirect(req.getContextPath() + "/benchmarks/compare?baselineId=" + baseParam + "&candidateId=" + candParam);
+        } else {
+            resp.sendRedirect(req.getContextPath() + "/dashboard");
         }
     }
 

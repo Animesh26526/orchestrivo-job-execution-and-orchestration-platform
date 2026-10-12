@@ -23,6 +23,21 @@ public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
                 try {
                     st.execute("ALTER TABLE benchmark_runs ADD COLUMN benchmark_group VARCHAR(100) NULL");
                 } catch (SQLException ignored) {}
+                try {
+                    st.execute("ALTER TABLE benchmark_runs ADD COLUMN batch_elapsed_nanos BIGINT NULL");
+                } catch (SQLException ignored) {}
+                try {
+                    st.execute("ALTER TABLE benchmark_runs ADD COLUMN valid_run_count INT NULL");
+                } catch (SQLException ignored) {}
+                try {
+                    st.execute("ALTER TABLE benchmark_runs ADD COLUMN quantum INT NULL");
+                } catch (SQLException ignored) {}
+                try {
+                    st.execute("CREATE TABLE IF NOT EXISTS system_settings (" +
+                            "setting_key VARCHAR(64) NOT NULL PRIMARY KEY, " +
+                            "setting_value VARCHAR(255) NOT NULL, " +
+                            "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)");
+                } catch (SQLException ignored) {}
                 schemaEnsured = true;
             } catch (SQLException ignored) {
                 schemaEnsured = true;
@@ -32,7 +47,7 @@ public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
 
     @Override
     public BenchmarkRunRecord save(BenchmarkRunRecord record) {
-        String sqlRun = "INSERT INTO benchmark_runs (owner_user_id, algorithm_name, process_count, seed, warmup_iterations, measured_iterations, median_nanos, min_nanos, max_nanos, std_dev_nanos, validation_passed, environment_info, run_type, benchmark_group) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sqlRun = "INSERT INTO benchmark_runs (owner_user_id, algorithm_name, process_count, seed, warmup_iterations, measured_iterations, median_nanos, min_nanos, max_nanos, std_dev_nanos, validation_passed, environment_info, run_type, benchmark_group, batch_elapsed_nanos, valid_run_count, quantum) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         Connection conn = null;
         try {
@@ -55,6 +70,13 @@ public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
                 pstmt.setString(12, record.getEnvironmentInfo());
                 pstmt.setString(13, record.getRunType());
                 pstmt.setString(14, record.getBenchmarkGroup());
+                pstmt.setLong(15, record.getBatchElapsedNanos());
+                pstmt.setInt(16, record.getValidRunCount());
+                if (record.getQuantum() != null) {
+                    pstmt.setInt(17, record.getQuantum());
+                } else {
+                    pstmt.setNull(17, Types.INTEGER);
+                }
 
                 pstmt.executeUpdate();
 
@@ -222,6 +244,21 @@ public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
         } catch (SQLException ignored) {
             record.setRunType("STANDARD");
         }
+
+        try {
+            record.setBatchElapsedNanos(rs.getLong("batch_elapsed_nanos"));
+        } catch (SQLException ignored) {}
+
+        try {
+            record.setValidRunCount(rs.getInt("valid_run_count"));
+        } catch (SQLException ignored) {}
+
+        try {
+            int q = rs.getInt("quantum");
+            if (!rs.wasNull()) {
+                record.setQuantum(q);
+            }
+        } catch (SQLException ignored) {}
 
         try {
             record.setBenchmarkGroup(rs.getString("benchmark_group"));

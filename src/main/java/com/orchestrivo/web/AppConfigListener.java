@@ -40,8 +40,9 @@ public class AppConfigListener implements ServletContextListener {
             BenchmarkRepositoryJdbcImpl br = new BenchmarkRepositoryJdbcImpl();
             AuditLogRepositoryJdbcImpl ar = new AuditLogRepositoryJdbcImpl();
             ExecutionJobRepositoryJdbcImpl jr = new ExecutionJobRepositoryJdbcImpl();
+            com.orchestrivo.persistence.SystemSettingsRepositoryJdbcImpl sr = new com.orchestrivo.persistence.SystemSettingsRepositoryJdbcImpl();
 
-            ServiceRegistry.initialize(ur, wr, er, br, ar, jr);
+            ServiceRegistry.initialize(ur, wr, er, br, ar, jr, sr);
 
             // Start the background execution engine
             if (ServiceRegistry.workerManager != null) {

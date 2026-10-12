@@ -15,7 +15,7 @@ public class AuthFilter implements Filter {
         HttpServletResponse response = (HttpServletResponse) res;
         
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        boolean isPublic = path.equals("/") || path.equals("/login") || path.equals("/register") || path.startsWith("/assets/");
+        boolean isPublic = path.equals("/") || path.equals("/login") || path.equals("/register") || path.startsWith("/assets/") || path.startsWith("/demo");
         
         HttpSession session = request.getSession(true);
         boolean isLoggedIn = (session.getAttribute("user") != null);

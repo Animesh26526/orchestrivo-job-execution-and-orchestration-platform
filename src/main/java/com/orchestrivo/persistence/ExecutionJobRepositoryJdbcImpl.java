@@ -262,7 +262,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
     @Override
     public Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId, int leaseDurationSeconds) {
         int safeDuration = Math.max(5, leaseDurationSeconds);
-        String findCandidatesSql = "SELECT id FROM execution_jobs WHERE status = 'QUEUED' ORDER BY id ASC LIMIT 5";
+        String findCandidatesSql = "SELECT id FROM execution_jobs WHERE status = 'QUEUED' ORDER BY id ASC LIMIT 20";
         String claimSql = "UPDATE execution_jobs " +
                 "SET status = 'RUNNING', claimed_by = ?, claim_token = ?, claimed_at = NOW(), " +
                 "lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND), " +
@@ -665,6 +665,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                 "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_cnt, " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_cnt, " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_cnt, " +
+                "SUM(CASE WHEN status = 'FAILED' AND attempt_count >= max_attempts THEN 1 ELSE 0 END) AS dead_letter_cnt, " +
                 "AVG(queue_wait_ms) AS avg_wait, " +
                 "AVG(execution_duration_ms) AS avg_duration, " +
                 "MAX(CASE WHEN status = 'QUEUED' THEN TIMESTAMPDIFF(SECOND, created_at, NOW()) ELSE 0 END) AS oldest_queued " +
@@ -685,6 +686,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                     metrics.setCompletedCount(rs.getInt("completed_cnt"));
                     metrics.setFailedCount(rs.getInt("failed_cnt"));
                     metrics.setCancelledCount(rs.getInt("cancelled_cnt"));
+                    metrics.setDeadLetterCount(rs.getInt("dead_letter_cnt"));
                     metrics.setAvgQueueWaitMs(rs.getDouble("avg_wait"));
                     metrics.setAvgExecutionDurationMs(rs.getDouble("avg_duration"));
                     metrics.setOldestQueuedAgeSeconds(rs.getLong("oldest_queued"));

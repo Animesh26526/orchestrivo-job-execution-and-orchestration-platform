@@ -184,4 +184,51 @@ public class ExperimentService {
 
         return new com.orchestrivo.model.ComparisonResult(runs, mode, compatibilityMessage, tradeOffNotes);
     }
+
+    public List<com.orchestrivo.model.SchedulingAlgorithmSummary> getAlgorithmExperimentSummary(long userId) {
+        if (runRepository == null) return java.util.Collections.emptyList();
+        List<ExperimentRunRecord> runs = runRepository.findByOwnerId(userId);
+        if (runs.isEmpty()) return java.util.Collections.emptyList();
+
+        java.util.Map<String, List<ExperimentRunRecord>> byAlgo = new java.util.LinkedHashMap<>();
+        for (ExperimentRunRecord r : runs) {
+            String algo = r.getAlgorithmName() != null ? r.getAlgorithmName().toUpperCase() : "UNKNOWN";
+            byAlgo.computeIfAbsent(algo, k -> new java.util.ArrayList<>()).add(r);
+        }
+
+        List<com.orchestrivo.model.SchedulingAlgorithmSummary> summaries = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, List<ExperimentRunRecord>> entry : byAlgo.entrySet()) {
+            String algo = entry.getKey();
+            List<ExperimentRunRecord> list = entry.getValue();
+            int total = list.size();
+            int success = 0;
+            int failed = 0;
+            double sumWait = 0.0;
+            double sumTurnaround = 0.0;
+            double sumCpuUtil = 0.0;
+            int validCount = 0;
+
+            for (ExperimentRunRecord r : list) {
+                if ("SUCCEEDED".equalsIgnoreCase(r.getRunStatus()) || "COMPLETED".equalsIgnoreCase(r.getRunStatus())) {
+                    success++;
+                    if (r.getResult() != null && r.getResult().getAggregateMetrics() != null) {
+                        sumWait += r.getResult().getAggregateMetrics().getAverageWaitingTime();
+                        sumTurnaround += r.getResult().getAggregateMetrics().getAverageTurnaroundTime();
+                        sumCpuUtil += r.getResult().getAggregateMetrics().getCpuUtilizationPercentage();
+                        validCount++;
+                    }
+                } else {
+                    failed++;
+                }
+            }
+
+            summaries.add(new com.orchestrivo.model.SchedulingAlgorithmSummary(
+                algo, total, success, failed,
+                validCount > 0 ? (sumWait / validCount) : 0.0,
+                validCount > 0 ? (sumTurnaround / validCount) : 0.0,
+                validCount > 0 ? (sumCpuUtil / validCount) : 0.0
+            ));
+        }
+        return summaries;
+    }
 }

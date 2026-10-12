@@ -14,7 +14,7 @@ import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.util.*;
 
-@WebServlet({"/experiments", "/experiments/run", "/experiments/view", "/experiments/compare", "/experiments/export", "/experiments/delete"})
+@WebServlet({"/experiments", "/experiments/run", "/experiments/view", "/experiments/compare", "/experiments/export", "/experiments/delete", "/experiments/new"})
 public class ExperimentServlet extends HttpServlet {
 
     @Override
@@ -28,8 +28,19 @@ public class ExperimentServlet extends HttpServlet {
             handleExportGet(req, resp, user);
         } else if ("/experiments/compare".equals(path)) {
             handleCompareGet(req, resp, user);
+        } else if ("/experiments/new".equals(path)) {
+            handleNewGet(req, resp, user);
         } else {
             handleListGet(req, resp, user);
+        }
+    }
+
+    private void handleNewGet(HttpServletRequest req, HttpServletResponse resp, User user) throws IOException {
+        String wIdStr = req.getParameter("workloadId");
+        if (wIdStr != null && !wIdStr.trim().isEmpty()) {
+            resp.sendRedirect(req.getContextPath() + "/workloads/view?id=" + wIdStr.trim() + "#runSimulationCard");
+        } else {
+            resp.sendRedirect(req.getContextPath() + "/workloads");
         }
     }
 

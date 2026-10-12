@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@WebServlet({"/jobs", "/jobs/view", "/jobs/status", "/jobs/retry", "/jobs/cancel", "/jobs/batch"})
+@WebServlet({"/jobs", "/jobs/view", "/jobs/status", "/jobs/retry", "/jobs/cancel", "/jobs/batch", "/jobs/new"})
 public class JobServlet extends HttpServlet {
 
     @Override
@@ -35,6 +35,9 @@ public class JobServlet extends HttpServlet {
             handleStatusJsonGet(req, resp);
         } else if ("/jobs/batch".equals(path)) {
             handleBatchGet(req, resp, user);
+        } else if ("/jobs/new".equals(path)) {
+            String query = req.getQueryString();
+            resp.sendRedirect(req.getContextPath() + "/jobs/batch" + (query != null ? "?" + query : ""));
         } else {
             handleListGet(req, resp, user);
         }

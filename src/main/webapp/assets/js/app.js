@@ -37,6 +37,67 @@ document.addEventListener('DOMContentLoaded', function () {
     algoSelect.addEventListener('change', updateQuantumVisibility);
     updateQuantumVisibility();
   }
+
+  // 3. Accessible Dropdown Navigation
+  const dropdownContainers = document.querySelectorAll('.has-dropdown');
+  function closeAllDropdowns(exceptContainer) {
+    dropdownContainers.forEach(function (container) {
+      if (container !== exceptContainer) {
+        container.classList.remove('open');
+        const btn = container.querySelector('.dropdown-toggle');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  dropdownContainers.forEach(function (container) {
+    const toggle = container.querySelector('.dropdown-toggle');
+    const menu = container.querySelector('.dropdown-menu');
+    if (!toggle || !menu) return;
+
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const isOpen = container.classList.contains('open');
+      closeAllDropdowns(container);
+      if (!isOpen) {
+        container.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+      } else {
+        container.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    container.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        container.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      } else if (e.key === 'ArrowDown' && container.classList.contains('open')) {
+        const items = menu.querySelectorAll('.dropdown-item');
+        if (items.length > 0) {
+          e.preventDefault();
+          items[0].focus();
+        }
+      }
+    });
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.has-dropdown')) {
+      closeAllDropdowns(null);
+    }
+  });
+
+  // 4. Mobile menu toggle
+  const mobileToggle = document.getElementById('navMobileToggle');
+  const navMenu = document.getElementById('navLinks');
+  if (mobileToggle && navMenu) {
+    mobileToggle.addEventListener('click', function () {
+      const isExpanded = navMenu.classList.toggle('open');
+      mobileToggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    });
+  }
 });
 
 // Dynamic Process Table Helper

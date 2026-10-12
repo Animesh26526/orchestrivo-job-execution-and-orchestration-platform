@@ -19,7 +19,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-@WebServlet({"/workloads", "/workloads/new", "/workloads/edit", "/workloads/view", "/workloads/duplicate", "/workloads/import", "/workloads/generate", "/workloads/export", "/workloads/delete"})
+@WebServlet({"/workloads", "/workloads/new", "/workloads/edit", "/workloads/view", "/workloads/duplicate", "/workloads/import", "/workloads/generate", "/workloads/export", "/workloads/delete", "/workloads/batch"})
 @MultipartConfig(
         fileSizeThreshold = 1024 * 64,       // 64 KB
         maxFileSize = 1024 * 1024,           // 1 MB
@@ -34,6 +34,9 @@ public class WorkloadServlet extends HttpServlet {
 
         if ("/workloads/new".equals(path)) {
             req.getRequestDispatcher("/WEB-INF/views/workloads/new.jsp").forward(req, resp);
+        } else if ("/workloads/batch".equals(path)) {
+            String query = req.getQueryString();
+            resp.sendRedirect(req.getContextPath() + "/jobs/batch" + (query != null ? "?" + query : ""));
         } else if ("/workloads/edit".equals(path)) {
             handleEditGet(req, resp, user);
         } else if ("/workloads/view".equals(path)) {

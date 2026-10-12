@@ -2,10 +2,9 @@ package com.orchestrivo.service;
 
 import com.google.gson.Gson;
 import com.orchestrivo.domain.*;
-import com.orchestrivo.model.BenchmarkMeasurement;
-import com.orchestrivo.model.BenchmarkRunRecord;
-import com.orchestrivo.model.PagedResult;
+import com.orchestrivo.model.*;
 import com.orchestrivo.persistence.BenchmarkRepository;
+import com.orchestrivo.persistence.SystemSettingsRepository;
 import com.orchestrivo.scheduling.SchedulingStrategy;
 import com.orchestrivo.scheduling.factory.SchedulingStrategyFactory;
 import com.orchestrivo.util.WorkloadGenerator;
@@ -14,6 +13,9 @@ import com.orchestrivo.validation.ScheduleValidator;
 import java.util.*;
 
 public class BenchmarkService {
+
+    public static final String KEY_FEATURED_BASELINE = "featured_baseline_run_id";
+    public static final String KEY_FEATURED_CANDIDATE = "featured_candidate_run_id";
 
     public static final int MIN_PROCESS_COUNT = 1;
     public static final int MAX_PROCESS_COUNT = 500;
@@ -25,15 +27,21 @@ public class BenchmarkService {
     public static final int MAX_QUANTUM = 100;
 
     private final BenchmarkRepository benchmarkRepository;
+    private final SystemSettingsRepository settingsRepository;
     private final ScheduleValidator validator;
     private final SchedulingStrategyFactory strategyFactory;
 
     public BenchmarkService() {
-        this(null);
+        this(null, null);
     }
 
     public BenchmarkService(BenchmarkRepository benchmarkRepository) {
+        this(benchmarkRepository, null);
+    }
+
+    public BenchmarkService(BenchmarkRepository benchmarkRepository, SystemSettingsRepository settingsRepository) {
         this.benchmarkRepository = benchmarkRepository;
+        this.settingsRepository = settingsRepository;
         this.validator = new ScheduleValidator();
         this.strategyFactory = new SchedulingStrategyFactory();
     }
@@ -160,7 +168,9 @@ public class BenchmarkService {
         List<BenchmarkMeasurement> measurements = new ArrayList<>();
         List<Long> durations = new ArrayList<>();
         boolean allValid = true;
+        int validRunCount = 0;
 
+        long batchStartNanos = System.nanoTime();
         for (int i = 1; i <= config.getMeasuredIterations(); i++) {
             long startNanos = System.nanoTime();
             ScheduleResult result = strategy.schedule(workload, schedulingConfig);
@@ -169,11 +179,14 @@ public class BenchmarkService {
             ValidationResult val = validator.validate(workload, result);
             if (!val.isValid()) {
                 allValid = false;
+            } else {
+                validRunCount++;
             }
 
             measurements.add(new BenchmarkMeasurement(i, elapsedNanos));
             durations.add(elapsedNanos);
         }
+        long batchElapsedNanos = System.nanoTime() - batchStartNanos;
 
         // 4. Statistical calculation
         Collections.sort(durations);
@@ -201,6 +214,11 @@ public class BenchmarkService {
         record.setMinNanos(min);
         record.setMaxNanos(max);
         record.setStdDevNanos(stdDev);
+        record.setBatchElapsedNanos(batchElapsedNanos);
+        record.setValidRunCount(validRunCount);
+        if (type == AlgorithmType.ROUND_ROBIN) {
+            record.setQuantum(config.getQuantum());
+        }
         record.setValidationPassed(allValid);
         record.setEnvironmentInfo(new Gson().toJson(env));
         record.setRunType(config.getRunType() != null ? config.getRunType() : "STANDARD");
@@ -276,5 +294,105 @@ public class BenchmarkService {
     public List<BenchmarkRunRecord> getRunsByGroup(long userId, String group) {
         if (benchmarkRepository == null || group == null) return Collections.emptyList();
         return benchmarkRepository.findByBenchmarkGroup(userId, group);
+    }
+
+    public Optional<BenchmarkComparisonResult> getFeaturedComparison() {
+        if (settingsRepository == null || benchmarkRepository == null) {
+            return Optional.empty();
+        }
+        Optional<Long> baselineIdOpt = settingsRepository.getLongSetting(KEY_FEATURED_BASELINE);
+        Optional<Long> candidateIdOpt = settingsRepository.getLongSetting(KEY_FEATURED_CANDIDATE);
+        if (baselineIdOpt.isEmpty() || candidateIdOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<BenchmarkRunRecord> baseOpt = benchmarkRepository.findById(baselineIdOpt.get());
+        Optional<BenchmarkRunRecord> candOpt = benchmarkRepository.findById(candidateIdOpt.get());
+        if (baseOpt.isEmpty() || candOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(compareRuns(baseOpt.get(), candOpt.get()));
+    }
+
+    public Optional<BenchmarkComparisonResult> getFeaturedOrFallbackComparison(long userId) {
+        Optional<BenchmarkComparisonResult> featured = getFeaturedComparison();
+        if (featured.isPresent()) {
+            return featured;
+        }
+        if (benchmarkRepository == null) return Optional.empty();
+        List<BenchmarkRunRecord> baselines = benchmarkRepository.findByRunType(userId, "BASELINE");
+        if (!baselines.isEmpty()) {
+            BenchmarkRunRecord base = baselines.get(0);
+            List<BenchmarkRunRecord> candidates = benchmarkRepository.findByRunType(userId, "CANDIDATE");
+            if (!candidates.isEmpty()) {
+                return Optional.of(compareRuns(base, candidates.get(0)));
+            }
+            List<BenchmarkRunRecord> all = benchmarkRepository.findByOwnerId(userId);
+            for (BenchmarkRunRecord r : all) {
+                if (r.getId() != base.getId()) {
+                    return Optional.of(compareRuns(base, r));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void setFeaturedComparison(long baselineId, long candidateId) {
+        if (settingsRepository == null) return;
+        settingsRepository.setLongSetting(KEY_FEATURED_BASELINE, baselineId);
+        settingsRepository.setLongSetting(KEY_FEATURED_CANDIDATE, candidateId);
+    }
+
+    public void clearFeaturedComparison() {
+        if (settingsRepository == null) return;
+        settingsRepository.removeSetting(KEY_FEATURED_BASELINE);
+        settingsRepository.removeSetting(KEY_FEATURED_CANDIDATE);
+    }
+
+    public Optional<Long> getFeaturedBaselineId() {
+        return settingsRepository != null ? settingsRepository.getLongSetting(KEY_FEATURED_BASELINE) : Optional.empty();
+    }
+
+    public Optional<Long> getFeaturedCandidateId() {
+        return settingsRepository != null ? settingsRepository.getLongSetting(KEY_FEATURED_CANDIDATE) : Optional.empty();
+    }
+
+    public boolean isFeaturedPair(long baselineId, long candidateId) {
+        Optional<Long> fBase = getFeaturedBaselineId();
+        Optional<Long> fCand = getFeaturedCandidateId();
+        return fBase.isPresent() && fCand.isPresent() && fBase.get() == baselineId && fCand.get() == candidateId;
+    }
+
+    public List<AlgorithmBenchmarkMetric> getAlgorithmMetricsSummary(long userId) {
+        if (benchmarkRepository == null) return Collections.emptyList();
+        List<BenchmarkRunRecord> runs = benchmarkRepository.findByOwnerId(userId);
+        if (runs.isEmpty()) return Collections.emptyList();
+
+        Map<String, List<BenchmarkRunRecord>> byAlgo = new LinkedHashMap<>();
+        for (BenchmarkRunRecord r : runs) {
+            byAlgo.computeIfAbsent(r.getAlgorithmName(), k -> new ArrayList<>()).add(r);
+        }
+
+        List<AlgorithmBenchmarkMetric> metrics = new ArrayList<>();
+        for (Map.Entry<String, List<BenchmarkRunRecord>> entry : byAlgo.entrySet()) {
+            String algo = entry.getKey();
+            List<BenchmarkRunRecord> list = entry.getValue();
+            int count = list.size();
+            double sumMedian = 0;
+            double min = Double.MAX_VALUE;
+            double max = 0;
+            double sumThroughput = 0;
+            for (BenchmarkRunRecord r : list) {
+                sumMedian += r.getMedianMicros();
+                min = Math.min(min, r.getMinMicros());
+                max = Math.max(max, r.getMaxMicros());
+                sumThroughput += r.getActualBatchThroughput();
+            }
+            metrics.add(new AlgorithmBenchmarkMetric(
+                algo, count, sumMedian / count,
+                min == Double.MAX_VALUE ? 0 : min, max,
+                sumThroughput / count
+            ));
+        }
+        return metrics;
     }
 }

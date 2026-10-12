@@ -37,4 +37,8 @@ public class WorkloadRecord {
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public Workload getWorkload() { return workload; }
     public void setWorkload(Workload workload) { this.workload = workload; }
+
+    public int getProcessCount() {
+        return (workload != null && workload.getProcesses() != null) ? workload.getProcesses().size() : 0;
+    }
 }

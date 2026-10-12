@@ -31,9 +31,28 @@
             <h1>Benchmark Before/After Comparison</h1>
             <p class="page-subtitle">Pairwise performance delta analysis between Baseline and Candidate runs</p>
         </div>
-        <div class="page-actions">
+        <div class="page-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <a href="<%= request.getContextPath() %>/benchmarks" class="btn btn-secondary">&larr; Back to Benchmarks</a>
+            <a href="<%= request.getContextPath() %>/benchmarks/guide" class="btn btn-outline">Methodology Guide</a>
             <c:if test="${not empty comparison}">
+                <c:choose>
+                    <c:when test="${isFeatured}">
+                        <form action="<%= request.getContextPath() %>/benchmarks/feature" method="post" style="display: inline; margin: 0;">
+                            <input type="hidden" name="action" value="unpin">
+                            <input type="hidden" name="baselineId" value="${comparison.baseline.id}">
+                            <input type="hidden" name="candidateId" value="${comparison.candidate.id}">
+                            <button type="submit" class="btn btn-warning" title="Remove as featured comparison on Dashboard">★ Pinned on Dashboard (Click to Unpin)</button>
+                        </form>
+                    </c:when>
+                    <c:otherwise>
+                        <form action="<%= request.getContextPath() %>/benchmarks/feature" method="post" style="display: inline; margin: 0;">
+                            <input type="hidden" name="action" value="pin">
+                            <input type="hidden" name="baselineId" value="${comparison.baseline.id}">
+                            <input type="hidden" name="candidateId" value="${comparison.candidate.id}">
+                            <button type="submit" class="btn btn-secondary" title="Feature this comparison permanently on the Dashboard">☆ Pin to Dashboard</button>
+                        </form>
+                    </c:otherwise>
+                </c:choose>
                 <a href="<%= request.getContextPath() %>/benchmarks/compare?baselineId=${comparison.baseline.id}&candidateId=${comparison.candidate.id}&export=csv" class="btn btn-primary">Export Comparison CSV</a>
             </c:if>
         </div>
@@ -107,7 +126,7 @@
                     <div class="metric-value ${comparison.improvement ? 'delta-good' : (comparison.regression ? 'delta-bad' : 'delta-parity')}">
                         ${comparison.formattedSpeedup}
                     </div>
-                    <div class="metric-subtext">Baseline vs Candidate Throughput Ratio</div>
+                    <div class="metric-subtext">Baseline vs Candidate Latency Ratio (P50)</div>
                 </div>
 
                 <div class="metric-card">
@@ -123,24 +142,24 @@
 
                 <div class="metric-card">
                     <div class="metric-header">
-                        <span class="metric-label">Throughput Delta</span>
-                        <span class="badge badge-primary">&Delta; Runs/sec</span>
+                        <span class="metric-label">Actual Batch Throughput Delta</span>
+                        <span class="badge badge-primary">&Delta; Measured Runs/sec</span>
                     </div>
-                    <div class="metric-value ${comparison.deltaThroughputPct > 0.5 ? 'delta-good' : (comparison.deltaThroughputPct < -0.5 ? 'delta-bad' : 'delta-parity')}">
-                        ${comparison.formattedDeltaThroughput}
+                    <div class="metric-value ${comparison.deltaActualBatchThroughputPct > 0.5 ? 'delta-good' : (comparison.deltaActualBatchThroughputPct < -0.5 ? 'delta-bad' : 'delta-parity')}">
+                        ${comparison.formattedDeltaActualBatchThroughput}
                     </div>
-                    <div class="metric-subtext">Simulated scheduling runs per second</div>
+                    <div class="metric-subtext">Measured: valid runs / wall-clock batch seconds</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-header">
-                        <span class="metric-label">Jitter / Stability Delta</span>
-                        <span class="badge badge-neutral">&Delta; StdDev</span>
+                        <span class="metric-label">Latency-Derived Throughput (Est.)</span>
+                        <span class="badge badge-neutral">&Delta; 1/Median Est.</span>
                     </div>
-                    <div class="metric-value ${comparison.deltaStdDevPct < -0.5 ? 'delta-good' : (comparison.deltaStdDevPct > 0.5 ? 'delta-bad' : 'delta-parity')}">
-                        ${comparison.formattedDeltaStdDev}
+                    <div class="metric-value ${comparison.deltaLatencyDerivedThroughputEstimatePct > 0.5 ? 'delta-good' : (comparison.deltaLatencyDerivedThroughputEstimatePct < -0.5 ? 'delta-bad' : 'delta-parity')}">
+                        ${comparison.formattedDeltaLatencyDerivedThroughputEstimate}
                     </div>
-                    <div class="metric-subtext">Dispersion change across repetitions</div>
+                    <div class="metric-subtext">Theoretical reciprocal estimate: 1 / P50</div>
                 </div>
             </div>
 
@@ -156,7 +175,7 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th style="width: 220px;">Metric / Property</th>
+                                <th style="width: 240px;">Metric / Property</th>
                                 <th>
                                     <strong>Baseline: Run #${comparison.baseline.id}</strong><br/>
                                     <small style="color: var(--color-slate-500); font-weight: normal;">Type: <code>${comparison.baseline.runType}</code></small>
@@ -181,11 +200,25 @@
                                 <td>${comparison.candidate.processCount}</td>
                                 <td>${comparison.baseline.processCount == comparison.candidate.processCount ? '<span class="badge badge-success">MATCHED</span>' : '<span class="badge badge-warning">DIFFERENT</span>'}</td>
                             </tr>
+                            <c:if test="${comparison.baseline.algorithmName == 'ROUND_ROBIN' || comparison.candidate.algorithmName == 'ROUND_ROBIN'}">
+                            <tr>
+                                <td style="font-weight: 600;">Time Quantum (q)</td>
+                                <td>${comparison.baseline.quantum > 0 ? comparison.baseline.quantum : 'N/A'}</td>
+                                <td>${comparison.candidate.quantum > 0 ? comparison.candidate.quantum : 'N/A'}</td>
+                                <td>${comparison.baseline.quantum == comparison.candidate.quantum ? '<span class="badge badge-success">MATCHED</span>' : '<span class="badge badge-warning">DIFFERENT</span>'}</td>
+                            </tr>
+                            </c:if>
                             <tr>
                                 <td style="font-weight: 600;">Reproducibility Seed</td>
                                 <td><code>${comparison.baseline.seed}</code></td>
                                 <td><code>${comparison.candidate.seed}</code></td>
                                 <td>${comparison.baseline.seed == comparison.candidate.seed ? '<span class="badge badge-success">MATCHED</span>' : '<span class="badge badge-warning">DIFFERENT</span>'}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: 600;">Warm-up / Measured Runs</td>
+                                <td>${comparison.baseline.warmupIterations} warm-up / ${comparison.baseline.measuredIterations} measured</td>
+                                <td>${comparison.candidate.warmupIterations} warm-up / ${comparison.candidate.measuredIterations} measured</td>
+                                <td>${(comparison.baseline.warmupIterations == comparison.candidate.warmupIterations && comparison.baseline.measuredIterations == comparison.candidate.measuredIterations) ? '<span class="badge badge-success">MATCHED</span>' : '<span class="badge badge-warning">DIFFERENT</span>'}</td>
                             </tr>
                             <tr>
                                 <td style="font-weight: 600;">Median Latency (P50)</td>
@@ -223,13 +256,27 @@
                                     ${comparison.formattedDeltaStdDev}
                                 </td>
                             </tr>
-                            <tr>
-                                <td style="font-weight: 600;">Throughput (Runs/Sec)</td>
-                                <td>${String.format('%.1f', comparison.baselineThroughput)} runs/s</td>
-                                <td>${String.format('%.1f', comparison.candidateThroughput)} runs/s</td>
-                                <td class="${comparison.deltaThroughputPct > 0.5 ? 'delta-good' : (comparison.deltaThroughputPct < -0.5 ? 'delta-bad' : 'delta-parity')}">
-                                    ${comparison.formattedDeltaThroughput}
+                            <tr style="background-color: var(--color-slate-50, #f8fafc);">
+                                <td style="font-weight: 700;">Actual Batch Throughput (runs/sec)</td>
+                                <td><strong>${String.format('%.1f', comparison.baselineActualBatchThroughput)}</strong> runs/s</td>
+                                <td><strong>${String.format('%.1f', comparison.candidateActualBatchThroughput)}</strong> runs/s</td>
+                                <td class="${comparison.deltaActualBatchThroughputPct > 0.5 ? 'delta-good' : (comparison.deltaActualBatchThroughputPct < -0.5 ? 'delta-bad' : 'delta-parity')}">
+                                    ${comparison.formattedDeltaActualBatchThroughput}
                                 </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: 600; color: var(--color-slate-600);">Latency-Derived Throughput Estimate (1/P50)</td>
+                                <td>${String.format('%.1f', comparison.baselineLatencyDerivedThroughputEstimate)} runs/s</td>
+                                <td>${String.format('%.1f', comparison.candidateLatencyDerivedThroughputEstimate)} runs/s</td>
+                                <td class="${comparison.deltaLatencyDerivedThroughputEstimatePct > 0.5 ? 'delta-good' : (comparison.deltaLatencyDerivedThroughputEstimatePct < -0.5 ? 'delta-bad' : 'delta-parity')}">
+                                    ${comparison.formattedDeltaLatencyDerivedThroughputEstimate}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: 600;">Batch Wall-Clock Duration</td>
+                                <td>${comparison.baseline.formattedBatchElapsed}</td>
+                                <td>${comparison.candidate.formattedBatchElapsed}</td>
+                                <td>${comparison.baseline.validRunCount} / ${comparison.baseline.measuredIterations} vs ${comparison.candidate.validRunCount} / ${comparison.candidate.measuredIterations} valid runs</td>
                             </tr>
                             <tr>
                                 <td style="font-weight: 600;">Invariants Validated</td>

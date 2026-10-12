@@ -22,9 +22,17 @@ public class BenchmarkComparisonResult {
     private final double deltaStdDevPct;
     private final long deltaMinNanos;
     private final long deltaMaxNanos;
-    private final double baselineThroughput;
-    private final double candidateThroughput;
-    private final double deltaThroughputPct;
+
+    // Actual Batch Throughput (runs per elapsed wall-clock second of measured batch)
+    private final double actualBaselineThroughput;
+    private final double actualCandidateThroughput;
+    private final double deltaActualThroughput;
+    private final double deltaActualThroughputPct;
+
+    // Latency-Derived Throughput Estimate (1 / median latency)
+    private final double latencyDerivedBaselineThroughput;
+    private final double latencyDerivedCandidateThroughput;
+    private final double deltaLatencyDerivedThroughputPct;
 
     public BenchmarkComparisonResult(BenchmarkRunRecord baseline, BenchmarkRunRecord candidate) {
         if (baseline == null || candidate == null) {
@@ -33,22 +41,33 @@ public class BenchmarkComparisonResult {
         this.baseline = baseline;
         this.candidate = candidate;
 
-        // Verify workload matching
+        // Verify complete workload & configuration matching
         boolean algoMatch = baseline.getAlgorithmName() != null
                 && baseline.getAlgorithmName().equalsIgnoreCase(candidate.getAlgorithmName());
         boolean countMatch = baseline.getProcessCount() == candidate.getProcessCount();
         boolean seedMatch = baseline.getSeed() == candidate.getSeed();
-        this.workloadMatched = algoMatch && countMatch && seedMatch;
+        boolean quantumMatch = true;
+        if ("ROUND_ROBIN".equalsIgnoreCase(baseline.getAlgorithmName()) || "ROUND_ROBIN".equalsIgnoreCase(candidate.getAlgorithmName())) {
+            quantumMatch = java.util.Objects.equals(baseline.getQuantum(), candidate.getQuantum());
+        }
+        boolean warmupMatch = baseline.getWarmupIterations() == candidate.getWarmupIterations();
+        boolean measuredMatch = baseline.getMeasuredIterations() == candidate.getMeasuredIterations();
+
+        this.workloadMatched = algoMatch && countMatch && seedMatch && quantumMatch && warmupMatch && measuredMatch;
 
         if (this.workloadMatched) {
             this.matchNotes = "Controlled Workload Matched: Identical algorithm ("
-                    + baseline.getAlgorithmName() + "), " + baseline.getProcessCount()
-                    + " processes, and pseudo-random seed (" + baseline.getSeed() + ").";
+                    + baseline.getAlgorithmName() + (baseline.getQuantum() != null ? " q=" + baseline.getQuantum() : "")
+                    + "), " + baseline.getProcessCount() + " processes, random seed (" + baseline.getSeed()
+                    + "), and iteration parameters (" + baseline.getWarmupIterations() + " warmup / " + baseline.getMeasuredIterations() + " measured).";
         } else {
-            StringBuilder sb = new StringBuilder("Workload Parameter Variation: ");
+            StringBuilder sb = new StringBuilder("Configuration Variations: ");
             if (!algoMatch) sb.append("[Algorithm: ").append(baseline.getAlgorithmName()).append(" vs ").append(candidate.getAlgorithmName()).append("] ");
+            if (!quantumMatch) sb.append("[Quantum: ").append(baseline.getQuantum()).append(" vs ").append(candidate.getQuantum()).append("] ");
             if (!countMatch) sb.append("[Processes: ").append(baseline.getProcessCount()).append(" vs ").append(candidate.getProcessCount()).append("] ");
             if (!seedMatch) sb.append("[Seed: ").append(baseline.getSeed()).append(" vs ").append(candidate.getSeed()).append("] ");
+            if (!warmupMatch) sb.append("[Warmup: ").append(baseline.getWarmupIterations()).append(" vs ").append(candidate.getWarmupIterations()).append("] ");
+            if (!measuredMatch) sb.append("[Measured: ").append(baseline.getMeasuredIterations()).append(" vs ").append(candidate.getMeasuredIterations()).append("] ");
             this.matchNotes = sb.toString().trim();
         }
 
@@ -87,13 +106,23 @@ public class BenchmarkComparisonResult {
         this.deltaMinNanos = candidate.getMinNanos() - baseline.getMinNanos();
         this.deltaMaxNanos = candidate.getMaxNanos() - baseline.getMaxNanos();
 
-        // Throughput in runs/sec based on median latency
-        this.baselineThroughput = baseline.getMedianNanos() > 0 ? (1_000_000_000.0 / baseline.getMedianNanos()) : 0.0;
-        this.candidateThroughput = candidate.getMedianNanos() > 0 ? (1_000_000_000.0 / candidate.getMedianNanos()) : 0.0;
-        if (this.baselineThroughput > 0) {
-            this.deltaThroughputPct = ((this.candidateThroughput - this.baselineThroughput) / this.baselineThroughput) * 100.0;
+        // Actual batch throughput in runs/sec based on elapsed wall-clock time
+        this.actualBaselineThroughput = baseline.getActualBatchThroughput();
+        this.actualCandidateThroughput = candidate.getActualBatchThroughput();
+        this.deltaActualThroughput = this.actualCandidateThroughput - this.actualBaselineThroughput;
+        if (this.actualBaselineThroughput > 0) {
+            this.deltaActualThroughputPct = (this.deltaActualThroughput / this.actualBaselineThroughput) * 100.0;
         } else {
-            this.deltaThroughputPct = 0.0;
+            this.deltaActualThroughputPct = 0.0;
+        }
+
+        // Latency-derived throughput estimate in runs/sec (1 / median latency)
+        this.latencyDerivedBaselineThroughput = baseline.getLatencyDerivedThroughputEstimate();
+        this.latencyDerivedCandidateThroughput = candidate.getLatencyDerivedThroughputEstimate();
+        if (this.latencyDerivedBaselineThroughput > 0) {
+            this.deltaLatencyDerivedThroughputPct = ((this.latencyDerivedCandidateThroughput - this.latencyDerivedBaselineThroughput) / this.latencyDerivedBaselineThroughput) * 100.0;
+        } else {
+            this.deltaLatencyDerivedThroughputPct = 0.0;
         }
     }
 
@@ -112,9 +141,33 @@ public class BenchmarkComparisonResult {
     public long getDeltaMinNanos() { return deltaMinNanos; }
     public long getDeltaMaxNanos() { return deltaMaxNanos; }
 
-    public double getBaselineThroughput() { return baselineThroughput; }
-    public double getCandidateThroughput() { return candidateThroughput; }
-    public double getDeltaThroughputPct() { return deltaThroughputPct; }
+    public boolean isControlledMatch() { return workloadMatched; }
+
+    // Actual Batch Throughput
+    public double getActualBaselineThroughput() { return actualBaselineThroughput; }
+    public double getActualCandidateThroughput() { return actualCandidateThroughput; }
+    public double getDeltaActualThroughput() { return deltaActualThroughput; }
+    public double getDeltaActualThroughputPct() { return deltaActualThroughputPct; }
+
+    public double getBaselineActualBatchThroughput() { return actualBaselineThroughput; }
+    public double getCandidateActualBatchThroughput() { return actualCandidateThroughput; }
+    public double getDeltaActualBatchThroughput() { return deltaActualThroughput; }
+    public double getDeltaActualBatchThroughputPct() { return deltaActualThroughputPct; }
+
+    // Latency-derived estimate
+    public double getLatencyDerivedBaselineThroughput() { return latencyDerivedBaselineThroughput; }
+    public double getLatencyDerivedCandidateThroughput() { return latencyDerivedCandidateThroughput; }
+    public double getDeltaLatencyDerivedThroughputPct() { return deltaLatencyDerivedThroughputPct; }
+
+    public double getBaselineLatencyDerivedThroughputEstimate() { return latencyDerivedBaselineThroughput; }
+    public double getCandidateLatencyDerivedThroughputEstimate() { return latencyDerivedCandidateThroughput; }
+    public double getDeltaLatencyDerivedThroughputEstimate() { return latencyDerivedCandidateThroughput - latencyDerivedBaselineThroughput; }
+    public double getDeltaLatencyDerivedThroughputEstimatePct() { return deltaLatencyDerivedThroughputPct; }
+
+    // Backward-compatible throughput accessors
+    public double getBaselineThroughput() { return actualBaselineThroughput; }
+    public double getCandidateThroughput() { return actualCandidateThroughput; }
+    public double getDeltaThroughputPct() { return deltaActualThroughputPct; }
 
     public boolean isImprovement() { return speedupFactor > 1.005; }
     public boolean isRegression() { return speedupFactor < 0.995; }
@@ -143,8 +196,21 @@ public class BenchmarkComparisonResult {
     }
 
     public String getFormattedDeltaThroughput() {
-        if (Math.abs(deltaThroughputPct) < 0.05) return "0.0% (parity)";
-        String sign = deltaThroughputPct > 0 ? "+" : "";
-        return String.format(Locale.US, "%s%.1f%%", sign, deltaThroughputPct);
+        if (Math.abs(deltaActualThroughputPct) < 0.05) return "0.0% (parity)";
+        String sign = deltaActualThroughputPct > 0 ? "+" : "";
+        return String.format(Locale.US, "%s%.1f%%", sign, deltaActualThroughputPct);
+    }
+
+    public String getFormattedDeltaActualBatchThroughput() {
+        if (Math.abs(deltaActualThroughputPct) < 0.05) return "0.0% (parity)";
+        String sign = deltaActualThroughputPct > 0 ? "+" : "";
+        return String.format(Locale.US, "%s%.1f%% (%+.1f runs/s)", sign, deltaActualThroughputPct, deltaActualThroughput);
+    }
+
+    public String getFormattedDeltaLatencyDerivedThroughputEstimate() {
+        if (Math.abs(deltaLatencyDerivedThroughputPct) < 0.05) return "0.0% (parity)";
+        String sign = deltaLatencyDerivedThroughputPct > 0 ? "+" : "";
+        double delta = latencyDerivedCandidateThroughput - latencyDerivedBaselineThroughput;
+        return String.format(Locale.US, "%s%.1f%% (%+.1f runs/s)", sign, deltaLatencyDerivedThroughputPct, delta);
     }
 }
