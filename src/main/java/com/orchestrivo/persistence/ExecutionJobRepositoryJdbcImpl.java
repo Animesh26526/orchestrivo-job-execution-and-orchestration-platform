@@ -422,6 +422,43 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
     }
 
     @Override
+    public Optional<ExecutionJobRecord> claimNextQueuedJobBaseline(String workerId, int leaseDurationSeconds) {
+        int safeDuration = Math.max(5, leaseDurationSeconds);
+        String findCandidatesSql = "SELECT id FROM execution_jobs WHERE status = 'QUEUED' ORDER BY id ASC LIMIT 5";
+        String claimSql = "UPDATE execution_jobs SET status = 'RUNNING', claimed_by = ?, claim_token = ?, " +
+                "claimed_at = NOW(), lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND), " +
+                "started_at = IFNULL(started_at, NOW()), attempt_count = attempt_count + 1 " +
+                "WHERE id = ? AND status = 'QUEUED'";
+
+        try (Connection conn = dataSource.getConnection()) {
+            List<Long> candidates = new ArrayList<>();
+            try (PreparedStatement psFind = conn.prepareStatement(findCandidatesSql);
+                 ResultSet rs = psFind.executeQuery()) {
+                while (rs.next()) {
+                    candidates.add(rs.getLong(1));
+                }
+            }
+
+            for (Long candidateId : candidates) {
+                String token = UUID.randomUUID().toString();
+                try (PreparedStatement psClaim = conn.prepareStatement(claimSql)) {
+                    psClaim.setString(1, workerId);
+                    psClaim.setString(2, token);
+                    psClaim.setInt(3, safeDuration);
+                    psClaim.setLong(4, candidateId);
+                    int updated = psClaim.executeUpdate();
+                    if (updated == 1) {
+                        return findById(candidateId);
+                    }
+                }
+            }
+            return Optional.empty();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error atomically claiming queued job (baseline)", e);
+        }
+    }
+
+    @Override
     public boolean renewLease(long jobId, String claimToken, int durationSeconds) {
         if (claimToken == null || claimToken.trim().isEmpty()) {
             return false;

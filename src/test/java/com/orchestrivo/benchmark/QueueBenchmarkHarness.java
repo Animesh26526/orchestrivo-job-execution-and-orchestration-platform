@@ -179,6 +179,36 @@ public class QueueBenchmarkHarness {
         public List<MatrixConfigurationResult> configurations = new ArrayList<>();
     }
 
+    public enum BenchmarkMode {
+        BASELINE,
+        CANDIDATE
+    }
+
+    private BenchmarkMode mode = BenchmarkMode.CANDIDATE;
+
+    public void setMode(BenchmarkMode mode) {
+        this.mode = mode;
+    }
+
+    public BenchmarkMode getMode() {
+        return mode;
+    }
+
+    private ExecutionJobRecord createCohortJobRecord(String batchId, String idemKey) {
+        ExecutionJobRecord record = new ExecutionJobRecord();
+        record.setOwnerUserId(benchmarkUser.getId());
+        record.setWorkloadId(benchmarkWorkload.getId());
+        record.setAlgorithmName("FCFS");
+        record.setAlgorithmParameters("{}");
+        record.setInputSnapshot(com.orchestrivo.model.WorkloadSnapshot.serialize(benchmarkWorkload.getWorkload(), 42L));
+        record.setStatus(ExecutionJobStatus.QUEUED);
+        record.setAttemptCount(0);
+        record.setMaxAttempts(3);
+        record.setBatchId(batchId);
+        record.setIdempotencyKey(idemKey);
+        return record;
+    }
+
     /**
      * Executes a single batch drain trial with explicit cohort isolation.
      */
@@ -195,30 +225,37 @@ public class QueueBenchmarkHarness {
 
         // 1. Enqueue cohort jobs
         long enqueueStart = System.nanoTime();
-        for (int i = 0; i < batchSize; i++) {
-            long jobStart = System.nanoTime();
-            String idemKey = result.cohortBatchId + "-job-" + i;
+        if (mode == BenchmarkMode.CANDIDATE) {
+            // CANDIDATE: Atomic JDBC batch enqueueing
+            List<ExecutionJobRecord> batch = new ArrayList<>(batchSize);
+            for (int i = 0; i < batchSize; i++) {
+                String idemKey = result.cohortBatchId + "-job-" + i;
+                batch.add(createCohortJobRecord(result.cohortBatchId, idemKey));
+            }
+            List<ExecutionJobRecord> savedList = jobRepository.saveAll(batch);
+            long enqueueEnd = System.nanoTime();
+            result.enqueueDurationNanos = enqueueEnd - enqueueStart;
+            long perJobNanos = result.enqueueDurationNanos / batchSize;
+            for (ExecutionJobRecord saved : savedList) {
+                cohortJobIds.add(saved.getId());
+                enqueueDurationsNanos.add(perJobNanos);
+            }
+        } else {
+            // BASELINE: Individual single-row inserts
+            for (int i = 0; i < batchSize; i++) {
+                long jobStart = System.nanoTime();
+                String idemKey = result.cohortBatchId + "-job-" + i;
+                ExecutionJobRecord record = createCohortJobRecord(result.cohortBatchId, idemKey);
+                ExecutionJobRecord saved = jobRepository.save(record);
+                long jobDuration = System.nanoTime() - jobStart;
 
-            ExecutionJobRecord record = new ExecutionJobRecord();
-            record.setOwnerUserId(benchmarkUser.getId());
-            record.setWorkloadId(benchmarkWorkload.getId());
-            record.setAlgorithmName("FCFS");
-            record.setAlgorithmParameters("{}");
-            record.setInputSnapshot(com.orchestrivo.model.WorkloadSnapshot.serialize(benchmarkWorkload.getWorkload(), 42L));
-            record.setStatus(ExecutionJobStatus.QUEUED);
-            record.setAttemptCount(0);
-            record.setMaxAttempts(3);
-            record.setBatchId(result.cohortBatchId);
-            record.setIdempotencyKey(idemKey);
-
-            ExecutionJobRecord saved = jobRepository.save(record);
-            long jobDuration = System.nanoTime() - jobStart;
-
-            cohortJobIds.add(saved.getId());
-            enqueueDurationsNanos.add(jobDuration);
+                cohortJobIds.add(saved.getId());
+                enqueueDurationsNanos.add(jobDuration);
+            }
+            long enqueueEnd = System.nanoTime();
+            result.enqueueDurationNanos = enqueueEnd - enqueueStart;
         }
-        long enqueueEnd = System.nanoTime();
-        result.enqueueDurationNanos = enqueueEnd - enqueueStart;
+
         result.enqueueThroughputJobsPerSec = (batchSize / (double) result.enqueueDurationNanos) * 1_000_000_000.0;
 
         Collections.sort(enqueueDurationsNanos);
@@ -227,11 +264,15 @@ public class QueueBenchmarkHarness {
         result.enqueueMeanLatencyMs = computeMean(enqueueDurationsNanos) / 1_000_000.0;
 
         // 2. Start worker manager and drain cohort
+        boolean eventDriven = (mode == BenchmarkMode.CANDIDATE);
+        boolean useBaseline = (mode == BenchmarkMode.BASELINE);
         ExecutionWorkerManager manager = new ExecutionWorkerManager(
                 jobRepository,
                 experimentRunRepository,
                 auditService,
-                workerCount
+                workerCount,
+                eventDriven,
+                useBaseline
         );
 
         long drainStart = System.nanoTime();

@@ -4,6 +4,7 @@ import com.orchestrivo.model.BenchmarkComparisonResult;
 import com.orchestrivo.model.QueueMetrics;
 import com.orchestrivo.persistence.*;
 import com.orchestrivo.web.ServiceRegistry;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -67,5 +68,13 @@ public class DemoDataSeederTest {
         assertTrue(qMetrics.getCancelledCount() >= 2);
         assertTrue((qMetrics.getQueuedCount() + qMetrics.getCompletedCount()) >= 28,
                 "Queued jobs must either remain queued or have been completed by active background engine");
+    }
+
+    @AfterAll
+    static void cleanUpDemoJobs() {
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement("DELETE FROM execution_jobs")) {
+            ps.executeUpdate();
+        } catch (Exception ignored) {}
     }
 }

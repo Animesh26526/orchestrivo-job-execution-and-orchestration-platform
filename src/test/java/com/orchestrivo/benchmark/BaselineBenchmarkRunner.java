@@ -13,6 +13,7 @@ public class BaselineBenchmarkRunner {
         System.out.println("Starting Benchmark Suite: " + suiteLabel + " targeting " + outputFile);
 
         QueueBenchmarkHarness harness = new QueueBenchmarkHarness();
+        harness.setMode(QueueBenchmarkHarness.BenchmarkMode.BASELINE);
         harness.initialize();
 
         // Matrix 1: Worker scaling on controlled batch size of 20 jobs

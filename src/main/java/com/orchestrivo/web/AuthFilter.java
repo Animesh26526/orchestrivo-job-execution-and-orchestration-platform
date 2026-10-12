@@ -14,8 +14,30 @@ public class AuthFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
         
-        String path = request.getRequestURI().substring(request.getContextPath().length());
-        boolean isPublic = path.equals("/") || path.equals("/login") || path.equals("/register") || path.startsWith("/assets/") || path.startsWith("/demo");
+        String servletPath = request.getServletPath();
+        String pathInfo = request.getPathInfo();
+        String path = (servletPath != null ? servletPath : "") + (pathInfo != null ? pathInfo : "");
+        if (path.isEmpty()) {
+            if (request.getRequestURI() != null) {
+                String uri = request.getRequestURI();
+                String ctx = request.getContextPath() != null ? request.getContextPath() : "";
+                if (uri.startsWith(ctx)) {
+                    path = uri.substring(ctx.length());
+                } else {
+                    path = uri;
+                }
+            }
+        }
+        if (path.isEmpty()) {
+            path = "/";
+        }
+        int semicolonIdx = path.indexOf(';');
+        if (semicolonIdx != -1) {
+            path = path.substring(0, semicolonIdx);
+        }
+        
+        boolean isPublic = path.equals("/") || path.equals("/login") || path.equals("/register") 
+                || path.startsWith("/assets/") || path.startsWith("/demo");
         
         HttpSession session = request.getSession(true);
         boolean isLoggedIn = (session.getAttribute("user") != null);
@@ -24,6 +46,7 @@ public class AuthFilter implements Filter {
         if (session.getAttribute("csrfToken") == null) {
             session.setAttribute("csrfToken", java.util.UUID.randomUUID().toString());
         }
+        request.setAttribute("csrfToken", session.getAttribute("csrfToken"));
         
         if (!isPublic && !isLoggedIn) {
             response.sendRedirect(request.getContextPath() + "/login");
@@ -35,6 +58,13 @@ public class AuthFilter implements Filter {
         if (method.equalsIgnoreCase("POST") || method.equalsIgnoreCase("PUT") || method.equalsIgnoreCase("DELETE")) {
             String sessionCsrf = (String) session.getAttribute("csrfToken");
             String requestCsrf = request.getParameter("csrfToken");
+            if (requestCsrf == null || requestCsrf.trim().isEmpty()) {
+                requestCsrf = request.getHeader("X-CSRF-TOKEN");
+            }
+            if (requestCsrf == null || requestCsrf.trim().isEmpty()) {
+                requestCsrf = request.getHeader("X-XSRF-TOKEN");
+            }
+
             if (sessionCsrf == null || !sessionCsrf.equals(requestCsrf)) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or missing CSRF Token");
                 return;

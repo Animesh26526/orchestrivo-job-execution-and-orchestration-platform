@@ -26,6 +26,8 @@ public interface ExecutionJobRepository {
 
     Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId, int leaseDurationSeconds);
 
+    Optional<ExecutionJobRecord> claimNextQueuedJobBaseline(String workerId, int leaseDurationSeconds);
+
     boolean renewLease(long jobId, String claimToken, int durationSeconds);
 
     boolean markCompleted(long jobId, long experimentRunId, long durationMs);

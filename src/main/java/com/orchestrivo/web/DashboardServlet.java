@@ -46,6 +46,9 @@ public class DashboardServlet extends HttpServlet {
             req.setAttribute("featuredComparison", featuredOpt.orElse(null));
             req.setAttribute("isFeaturedPinned", isPinned);
 
+            // Queue Orchestration Performance Comparison (Database-backed)
+            req.setAttribute("queueComparison", com.orchestrivo.service.QueueBenchmarkComparisonService.getSummary());
+
             // Section D: Benchmark Summaries
             req.setAttribute("benchmarkSummaries", ServiceRegistry.benchmarkService.getAlgorithmMetricsSummary(user.getId()));
             req.setAttribute("benchmarks", ServiceRegistry.benchmarkService.getBenchmarksPaged(user.getId(), 1, 5).getItems());

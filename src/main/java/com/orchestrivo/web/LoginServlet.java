@@ -18,8 +18,11 @@ public class LoginServlet extends HttpServlet {
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String email = req.getParameter("email");
         String password = req.getParameter("password");
+        if (email != null) {
+            email = email.trim();
+        }
 
-        User user = ServiceRegistry.authService.authenticate(email, password);
+        User user = ServiceRegistry.authService != null ? ServiceRegistry.authService.authenticate(email, password) : null;
         if (user != null) {
             HttpSession session = req.getSession(true);
             req.changeSessionId();
@@ -30,6 +33,7 @@ public class LoginServlet extends HttpServlet {
             }
             resp.sendRedirect(req.getContextPath() + "/dashboard");
         } else {
+            req.setAttribute("email", email);
             req.setAttribute("error", "Invalid email or password");
             req.getRequestDispatcher("/WEB-INF/views/auth/login.jsp").forward(req, resp);
         }

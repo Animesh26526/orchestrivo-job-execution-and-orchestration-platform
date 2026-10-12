@@ -4,7 +4,7 @@
 [![Jakarta EE 10](https://img.shields.io/badge/Jakarta_EE-10-orange.svg)](https://jakarta.ee/)
 [![Apache Tomcat](https://img.shields.io/badge/Tomcat-10.1%2B-yellow.svg)](https://tomcat.apache.org/)
 [![MySQL 8](https://img.shields.io/badge/MySQL-8.0%2B-blue.svg)](https://www.mysql.com/)
-[![Tests](https://img.shields.io/badge/Tests-187%20Passing%20(100%25)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-196%20Passing%20(100%25)-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Zero Mock Fabrication](https://img.shields.io/badge/Metrics-Evidence--Backed%20Only-success.svg)](final_engineering_report.md)
 
@@ -91,20 +91,20 @@ Measured under identical environment conditions (Java 17, MySQL 8.0.44 Community
 
 | Worker Count | Workload Cohort | Baseline Median Drain (ms) | Candidate Median Drain (ms) | Drain Latency Delta (%) | Baseline Throughput (jobs/s) | Candidate Throughput (jobs/s) | Throughput Gain (%) | Speedup Factor |
 |---|---|---|---|---|---|---|---|---|
-| **1 Worker** | 20 Jobs (FCFS) | 7,024.15 ms | **825.42 ms** | **-88.25%** | 2.85 jobs/s | **24.23 jobs/s** | **+750.18%** | **8.51x** |
-| **2 Workers** | 20 Jobs (FCFS) | 4,992.34 ms | **689.68 ms** | **-86.19%** | 4.01 jobs/s | **29.00 jobs/s** | **+623.19%** | **7.24x** |
-| **4 Workers** | 20 Jobs (FCFS) | 2,604.05 ms | **642.76 ms** | **-75.32%** | 7.68 jobs/s | **31.12 jobs/s** | **+305.21%** | **4.05x** |
-| **8 Workers** | 20 Jobs (FCFS) | 628.18 ms | **641.30 ms** | +2.09% (parity) | 31.84 jobs/s | 31.19 jobs/s | -2.04% | 1.00x |
+| **1 Worker** | 20 Jobs (FCFS) | 7,051.77 ms | **821.80 ms** | **-88.35%** | 2.84 jobs/s | **24.34 jobs/s** | **+757.04%** | **8.58x** |
+| **2 Workers** | 20 Jobs (FCFS) | 5,026.28 ms | **666.06 ms** | **-86.75%** | 3.98 jobs/s | **30.03 jobs/s** | **+654.52%** | **7.55x** |
+| **4 Workers** | 20 Jobs (FCFS) | 2,610.64 ms | **636.98 ms** | **-75.60%** | 7.66 jobs/s | **31.40 jobs/s** | **+309.92%** | **4.10x** |
+| **8 Workers** | 20 Jobs (FCFS) | 632.29 ms | **632.66 ms** | +0.06% (parity) | 31.63 jobs/s | 31.61 jobs/s | -0.06% | 1.00x |
 
-*Note: At 8 workers with a 20-job batch, the queue drain reaches the host process execution floor (~635 ms total drain time), saturating concurrency.*
+*Note: At 8 workers with a 20-job batch, the queue drain reaches the host process execution floor (~632 ms total drain time), saturating concurrency.*
 
 ### Batch Scaling (Fixed 4 Bounded Workers)
 
 | Workload Batch Size | Baseline Median Drain (ms) | Candidate Median Drain (ms) | Baseline Throughput (jobs/s) | Candidate Throughput (jobs/s) |
 |---|---|---|---|---|
-| **20 Jobs** | 2,604.05 ms | **642.76 ms** | 7.68 jobs/s | **31.12 jobs/s (+305.2%)** |
-| **50 Jobs** | 761.59 ms | 798.25 ms | 65.65 jobs/s | 62.64 jobs/s |
-| **100 Jobs** | 1,012.49 ms | 1,050.75 ms | 98.77 jobs/s | 95.17 jobs/s |
+| **20 Jobs** | 2,610.64 ms | **636.98 ms** | 7.66 jobs/s | **31.40 jobs/s (+309.9%)** |
+| **50 Jobs** | 3,744.06 ms | **795.60 ms** | 13.35 jobs/s | **62.85 jobs/s (+370.8%)** |
+| **100 Jobs** | 3,014.20 ms | **1,502.68 ms** | 33.18 jobs/s | **66.55 jobs/s (+100.6%)** |
 
 ### Campaign Stress Benchmark (`BenchmarkCampaignRunnerTest`)
 
@@ -215,9 +215,15 @@ Configure environment variables:
 - `JDBC_PASSWORD`: `Orchestrivo_Secure_2026!`
 
 ### 2. Build and Verify Test Suite
-Run the full automated test suite (187 tests):
+Run the full automated test suite (196 tests):
 ```cmd
 .\mvnw.cmd clean test
+```
+
+Execute baseline and candidate queue benchmarks on demand:
+```cmd
+.\mvnw.cmd test -Dtest=BaselineBenchmarkRunnerTest -DexcludedGroups=none
+.\mvnw.cmd test -Dtest=CandidateBenchmarkRunnerTest -DexcludedGroups=none
 ```
 
 Assemble the WAR package:
@@ -258,9 +264,7 @@ Or trigger it via the web interface at `http://localhost:8080/orchestrivo/demo`.
  T E S T S
 -------------------------------------------------------
 [INFO] Running com.orchestrivo.benchmark.BenchmarkCampaignRunnerTest (2 tests) - PASSED
-[INFO] Running com.orchestrivo.benchmark.BaselineBenchmarkRunnerTest (1 test) - PASSED
-[INFO] Running com.orchestrivo.benchmark.CandidateBenchmarkRunnerTest (1 test) - PASSED
-[INFO] Running com.orchestrivo.benchmark.QueueBenchmarkHarnessTest (3 tests) - PASSED
+[INFO] Running com.orchestrivo.benchmark.QueueBenchmarkHarnessTest (4 tests) - PASSED
 [INFO] Running com.orchestrivo.domain.ProcessSpecTest (3 tests) - PASSED
 [INFO] Running com.orchestrivo.model.SnapshotVersioningTest (5 tests) - PASSED
 [INFO] Running com.orchestrivo.persistence.AuditLogRepositoryJdbcImplTest (1 test) - PASSED
@@ -294,9 +298,9 @@ Or trigger it via the web interface at `http://localhost:8080/orchestrivo/demo`.
 [INFO] Running com.orchestrivo.validation.BenchmarkValidationTest (28 tests) - PASSED
 [INFO] Running com.orchestrivo.validation.ScheduleValidatorTest (6 tests) - PASSED
 [INFO] Running com.orchestrivo.web.JobSecurityIntegrationTest (6 tests) - PASSED
-[INFO] Running com.orchestrivo.web.SecurityIntegrationTest (21 tests) - PASSED
+[INFO] Running com.orchestrivo.web.SecurityIntegrationTest (32 tests) - PASSED
 -------------------------------------------------------
-Results: 187 Tests Run, 187 Passed, 0 Failures, 0 Errors, 0 Skipped
+Results: 196 Tests Run, 196 Passed, 0 Failures, 0 Errors, 0 Skipped
 BUILD SUCCESS
 -------------------------------------------------------
 ```
