@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ExecutionJobRepository {
     ExecutionJobRecord save(ExecutionJobRecord job);
 
+    List<ExecutionJobRecord> saveAll(List<ExecutionJobRecord> jobs);
+
     Optional<ExecutionJobRecord> findById(long id);
 
     Optional<ExecutionJobRecord> findByIdAndOwner(long id, long userId);

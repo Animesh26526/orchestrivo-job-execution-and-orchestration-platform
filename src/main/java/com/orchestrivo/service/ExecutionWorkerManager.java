@@ -127,6 +127,12 @@ public class ExecutionWorkerManager {
         }
     }
 
+    public void registerJobService(ExecutionJobService jobService) {
+        if (jobService != null) {
+            jobService.setJobSignalListener(this::triggerImmediatePoll);
+        }
+    }
+
     private void pollAndDispatch() {
         if (!running.get()) return;
 
@@ -140,6 +146,7 @@ public class ExecutionWorkerManager {
                             executeJob(job);
                         } finally {
                             taskLimiter.release();
+                            triggerImmediatePoll();
                         }
                     });
                 } else {

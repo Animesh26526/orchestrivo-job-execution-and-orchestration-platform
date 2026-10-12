@@ -181,7 +181,7 @@ public class ExecutionJobService {
         String batchId = "batch-" + UUID.randomUUID().toString();
         List<ExecutionJobRecord> createdJobs = new ArrayList<>();
 
-        // 2. Enqueue all validated jobs
+        // 2. Enqueue all validated jobs via atomic batch insert
         for (AlgorithmConfigSpec spec : configs) {
             AlgorithmType type = AlgorithmType.valueOf(spec.getAlgorithmName().trim().toUpperCase());
             Map<String, Object> params = new HashMap<>();
@@ -202,10 +202,10 @@ public class ExecutionJobService {
             job.setMaxAttempts(3);
             job.setBatchId(batchId);
 
-            ExecutionJobRecord saved = jobRepository.save(job);
-            createdJobs.add(saved);
+            createdJobs.add(job);
         }
 
+        createdJobs = jobRepository.saveAll(createdJobs);
         notifyWorker();
         return new BatchJobResult(batchId, workloadRecord.getId(), createdJobs);
     }

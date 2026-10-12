@@ -1,0 +1,7 @@
+workers,batchSize,baselineDrainDurationMs,candidateDrainDurationMs,drainDurationDeltaMs,drainDurationChangePct,baselineThroughputJobsPerSec,candidateThroughputJobsPerSec,throughputDeltaJobsPerSec,throughputChangePct,speedupFactor,baselineE2EP50Ms,candidateE2EP50Ms
+1,20,7024.15,825.42,-6198.73,-88.25,2.85,24.23,21.38,750.18,8.51x,3500.0,1000.0
+2,20,4992.34,689.68,-4302.66,-86.19,4.01,29.0,24.99,623.19,7.24x,3000.0,1000.0
+4,20,2604.05,642.76,-1961.29,-75.32,7.68,31.12,23.44,305.21,4.05x,1000.0,1000.0
+8,20,628.18,641.3,13.12,2.09,31.84,31.19,-0.65,-2.04,0.98x,1000.0,1000.0
+4,50,761.59,798.25,36.66,4.81,65.65,62.64,-3.01,-4.58,0.95x,1000.0,1000.0
+4,100,1012.49,1050.75,38.26,3.78,98.77,95.17,-3.6,-3.64,0.96x,1000.0,1000.0
