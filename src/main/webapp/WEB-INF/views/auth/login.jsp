@@ -24,11 +24,11 @@
     </c:if>
 
     <form action="<%= request.getContextPath() %>/login" method="post">
-        <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>" />
+        <input type="hidden" name="csrfToken" value="<c:out value='${not empty sessionScope.csrfToken ? sessionScope.csrfToken : csrfToken}'/>" />
 
         <div class="form-group">
             <label class="form-label" for="emailInput">Email Address</label>
-            <input type="email" id="emailInput" name="email" class="form-input" placeholder="name@domain.com" required autofocus>
+            <input type="email" id="emailInput" name="email" class="form-input" placeholder="name@domain.com" value="<c:out value='${email}'/>" required autofocus>
         </div>
 
         <div class="form-group">

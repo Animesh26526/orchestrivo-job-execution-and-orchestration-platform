@@ -24,6 +24,8 @@ public class ExecutionWorkerManager {
     private final AuditService auditService;
     private final ScheduleValidator validator;
     private final int workerCount;
+    private final boolean eventDrivenDispatch;
+    private final boolean useBaselineClaim;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledExecutorService pollerExecutor;
@@ -35,18 +37,29 @@ public class ExecutionWorkerManager {
     public ExecutionWorkerManager(ExecutionJobRepository jobRepository,
                                   ExperimentRunRepository experimentRunRepository,
                                   AuditService auditService) {
-        this(jobRepository, experimentRunRepository, auditService, 2);
+        this(jobRepository, experimentRunRepository, auditService, 2, true, false);
     }
 
     public ExecutionWorkerManager(ExecutionJobRepository jobRepository,
                                   ExperimentRunRepository experimentRunRepository,
                                   AuditService auditService,
                                   int workerCount) {
+        this(jobRepository, experimentRunRepository, auditService, workerCount, true, false);
+    }
+
+    public ExecutionWorkerManager(ExecutionJobRepository jobRepository,
+                                  ExperimentRunRepository experimentRunRepository,
+                                  AuditService auditService,
+                                  int workerCount,
+                                  boolean eventDrivenDispatch,
+                                  boolean useBaselineClaim) {
         this.jobRepository = jobRepository;
         this.experimentRunRepository = experimentRunRepository;
         this.auditService = auditService;
         this.validator = new ScheduleValidator();
         this.workerCount = Math.max(1, Math.min(8, workerCount));
+        this.eventDrivenDispatch = eventDrivenDispatch;
+        this.useBaselineClaim = useBaselineClaim;
         this.taskLimiter = new Semaphore(this.workerCount);
     }
 
@@ -127,12 +140,20 @@ public class ExecutionWorkerManager {
         }
     }
 
+    public void registerJobService(ExecutionJobService jobService) {
+        if (jobService != null && eventDrivenDispatch) {
+            jobService.setJobSignalListener(this::triggerImmediatePoll);
+        }
+    }
+
     private void pollAndDispatch() {
         if (!running.get()) return;
 
         while (running.get() && taskLimiter.tryAcquire()) {
             try {
-                Optional<ExecutionJobRecord> claimed = jobRepository.claimNextQueuedJob(instanceId);
+                Optional<ExecutionJobRecord> claimed = useBaselineClaim
+                        ? jobRepository.claimNextQueuedJobBaseline(instanceId, 30)
+                        : jobRepository.claimNextQueuedJob(instanceId, 30);
                 if (claimed.isPresent()) {
                     ExecutionJobRecord job = claimed.get();
                     workerPool.execute(() -> {
@@ -140,6 +161,9 @@ public class ExecutionWorkerManager {
                             executeJob(job);
                         } finally {
                             taskLimiter.release();
+                            if (eventDrivenDispatch) {
+                                triggerImmediatePoll();
+                            }
                         }
                     });
                 } else {

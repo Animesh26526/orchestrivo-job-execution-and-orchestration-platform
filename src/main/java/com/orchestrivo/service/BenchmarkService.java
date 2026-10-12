@@ -314,9 +314,9 @@ public class BenchmarkService {
     }
 
     public Optional<BenchmarkComparisonResult> getFeaturedOrFallbackComparison(long userId) {
-        Optional<BenchmarkComparisonResult> featured = getFeaturedComparison();
-        if (featured.isPresent()) {
-            return featured;
+        // If a pinned comparison reference is configured, respect it strictly. Do NOT silently switch if a record is missing.
+        if (getFeaturedBaselineId().isPresent() || getFeaturedCandidateId().isPresent()) {
+            return getFeaturedComparison();
         }
         if (benchmarkRepository == null) return Optional.empty();
         List<BenchmarkRunRecord> baselines = benchmarkRepository.findByRunType(userId, "BASELINE");
@@ -325,12 +325,6 @@ public class BenchmarkService {
             List<BenchmarkRunRecord> candidates = benchmarkRepository.findByRunType(userId, "CANDIDATE");
             if (!candidates.isEmpty()) {
                 return Optional.of(compareRuns(base, candidates.get(0)));
-            }
-            List<BenchmarkRunRecord> all = benchmarkRepository.findByOwnerId(userId);
-            for (BenchmarkRunRecord r : all) {
-                if (r.getId() != base.getId()) {
-                    return Optional.of(compareRuns(base, r));
-                }
             }
         }
         return Optional.empty();

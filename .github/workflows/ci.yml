@@ -1,0 +1,60 @@
+name: CI Build & Verification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Java 17 Test Suite & Verification
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: orchestrivo
+          MYSQL_USER: orchestrivo_user
+          MYSQL_PASSWORD: orchestrivo_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Wait for MySQL to become ready
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -u root -prootpassword --silent; do
+            echo "Waiting for MySQL service container..."
+            sleep 2
+          done
+
+      - name: Apply Database Schema Migrations
+        run: |
+          for file in $(ls -1v src/main/resources/db/*.sql); do
+            echo "Applying migration: $file"
+            mysql -h 127.0.0.1 -u orchestrivo_user -porchestrivo_password orchestrivo < "$file"
+          done
+
+      - name: Run Build and Test Suite
+        env:
+          JDBC_URL: jdbc:mysql://127.0.0.1:3306/orchestrivo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+          JDBC_USER: orchestrivo_user
+          JDBC_PASSWORD: orchestrivo_password
+        run: ./mvnw clean test --batch-mode
+
+      - name: Verify Packaging (WAR)
+        run: ./mvnw package -DskipTests --batch-mode

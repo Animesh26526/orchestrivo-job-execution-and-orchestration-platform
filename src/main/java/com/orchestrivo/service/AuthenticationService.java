@@ -59,12 +59,16 @@ public class AuthenticationService {
     }
 
     public User authenticate(String email, String password) {
-        Optional<User> optUser = userRepository.findByEmail(email);
+        String cleanEmail = email != null ? email.trim().toLowerCase() : "";
+        Optional<User> optUser = userRepository.findByEmail(cleanEmail);
         if (optUser.isEmpty()) {
             return null;
         }
         User user = optUser.get();
-        BCrypt.Result result = BCrypt.verifyer().verify(password.toCharArray(), user.getPasswordHash());
+        if (user.getPasswordHash() == null) {
+            return null;
+        }
+        BCrypt.Result result = BCrypt.verifyer().verify(password != null ? password.toCharArray() : new char[0], user.getPasswordHash());
         if (result.verified && user.isActive()) {
             return user;
         }

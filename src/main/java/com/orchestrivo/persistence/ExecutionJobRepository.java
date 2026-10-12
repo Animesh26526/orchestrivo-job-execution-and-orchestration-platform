@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ExecutionJobRepository {
     ExecutionJobRecord save(ExecutionJobRecord job);
 
+    List<ExecutionJobRecord> saveAll(List<ExecutionJobRecord> jobs);
+
     Optional<ExecutionJobRecord> findById(long id);
 
     Optional<ExecutionJobRecord> findByIdAndOwner(long id, long userId);
@@ -23,6 +25,8 @@ public interface ExecutionJobRepository {
     Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId);
 
     Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId, int leaseDurationSeconds);
+
+    Optional<ExecutionJobRecord> claimNextQueuedJobBaseline(String workerId, int leaseDurationSeconds);
 
     boolean renewLease(long jobId, String claimToken, int durationSeconds);
 

@@ -11,6 +11,9 @@ public class BenchmarkComparisonResult {
     private final BenchmarkRunRecord baseline;
     private final BenchmarkRunRecord candidate;
     private final boolean workloadMatched;
+    private final boolean fairComparison;
+    private final String experimentalVariable;
+    private final String variablesHeldConstant;
     private final String matchNotes;
 
     private final double speedupFactor;
@@ -53,14 +56,33 @@ public class BenchmarkComparisonResult {
         boolean warmupMatch = baseline.getWarmupIterations() == candidate.getWarmupIterations();
         boolean measuredMatch = baseline.getMeasuredIterations() == candidate.getMeasuredIterations();
 
+        boolean inputWorkloadMatched = countMatch && seedMatch && warmupMatch && measuredMatch;
         this.workloadMatched = algoMatch && countMatch && seedMatch && quantumMatch && warmupMatch && measuredMatch;
 
         if (this.workloadMatched) {
+            this.fairComparison = true;
+            this.experimentalVariable = "Implementation / Execution Environment";
+            this.variablesHeldConstant = "Algorithm (" + baseline.getAlgorithmName() + (baseline.getQuantum() != null ? " q=" + baseline.getQuantum() : "") + "), " + baseline.getProcessCount() + " processes, random seed " + baseline.getSeed() + ", " + baseline.getWarmupIterations() + " warmup / " + baseline.getMeasuredIterations() + " measured iterations";
             this.matchNotes = "Controlled Workload Matched: Identical algorithm ("
                     + baseline.getAlgorithmName() + (baseline.getQuantum() != null ? " q=" + baseline.getQuantum() : "")
                     + "), " + baseline.getProcessCount() + " processes, random seed (" + baseline.getSeed()
                     + "), and iteration parameters (" + baseline.getWarmupIterations() + " warmup / " + baseline.getMeasuredIterations() + " measured).";
+        } else if (inputWorkloadMatched) {
+            this.fairComparison = true;
+            if (algoMatch && !quantumMatch) {
+                this.experimentalVariable = "Time Quantum (" + baseline.getQuantum() + " -> " + candidate.getQuantum() + ")";
+            } else {
+                this.experimentalVariable = "Algorithm (" + baseline.getAlgorithmName() + " vs " + candidate.getAlgorithmName() + ")";
+            }
+            this.variablesHeldConstant = baseline.getProcessCount() + " processes, random seed " + baseline.getSeed() + ", " + baseline.getWarmupIterations() + " warmup / " + baseline.getMeasuredIterations() + " measured iterations";
+            StringBuilder sb = new StringBuilder("Controlled A/B Comparison on ").append(this.experimentalVariable).append(". Held constant: ").append(this.variablesHeldConstant).append(". ");
+            if (!algoMatch) sb.append("[Algorithm: ").append(baseline.getAlgorithmName()).append(" vs ").append(candidate.getAlgorithmName()).append("] ");
+            if (!quantumMatch) sb.append("[Quantum: ").append(baseline.getQuantum()).append(" vs ").append(candidate.getQuantum()).append("] ");
+            this.matchNotes = sb.toString().trim();
         } else {
+            this.fairComparison = false;
+            this.experimentalVariable = "Mismatched Inputs";
+            this.variablesHeldConstant = "None (Mismatched Inputs)";
             StringBuilder sb = new StringBuilder("Configuration Variations: ");
             if (!algoMatch) sb.append("[Algorithm: ").append(baseline.getAlgorithmName()).append(" vs ").append(candidate.getAlgorithmName()).append("] ");
             if (!quantumMatch) sb.append("[Quantum: ").append(baseline.getQuantum()).append(" vs ").append(candidate.getQuantum()).append("] ");
@@ -142,6 +164,9 @@ public class BenchmarkComparisonResult {
     public long getDeltaMaxNanos() { return deltaMaxNanos; }
 
     public boolean isControlledMatch() { return workloadMatched; }
+    public boolean isFairComparison() { return fairComparison; }
+    public String getExperimentalVariable() { return experimentalVariable; }
+    public String getVariablesHeldConstant() { return variablesHeldConstant; }
 
     // Actual Batch Throughput
     public double getActualBaselineThroughput() { return actualBaselineThroughput; }

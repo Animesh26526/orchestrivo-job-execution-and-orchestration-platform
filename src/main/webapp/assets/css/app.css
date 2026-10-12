@@ -5,7 +5,9 @@
 
 :root {
   --color-primary: #2563eb;
+  --color-primary-600: #2563eb;
   --color-primary-hover: #1d4ed8;
+  --color-primary-700: #1d4ed8;
   --color-primary-light: #eff6ff;
   --color-primary-border: #bfdbfe;
 
@@ -182,7 +184,8 @@ body {
   top: calc(100% + 6px);
   left: 0;
   min-width: 220px;
-  background: #ffffff;
+  background: var(--color-white);
+  color: var(--color-slate-700);
   border: 1px solid var(--color-slate-200);
   border-radius: var(--radius-sm);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
@@ -214,29 +217,50 @@ body {
   color: var(--color-slate-700);
   text-decoration: none;
   text-align: left;
-  background: transparent;
+  background-color: transparent;
   border: none;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.1s ease, color 0.1s ease;
+  transition: background-color 0.12s ease, color 0.12s ease;
   box-sizing: border-box;
 }
 
 .dropdown-item:hover,
+.dropdown-item:focus,
 .dropdown-item:focus-visible {
-  background: var(--color-slate-100);
-  color: var(--color-primary-600);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-hover);
   outline: none;
 }
 
+.dropdown-item:active {
+  background-color: var(--color-primary-border);
+  color: var(--color-primary-hover);
+}
+
+.dropdown-item:disabled,
+.dropdown-item.disabled {
+  color: var(--color-slate-400);
+  background-color: transparent;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .dropdown-item.logout-item {
-  color: #b91c1c;
+  color: var(--color-danger);
 }
 
 .dropdown-item.logout-item:hover,
+.dropdown-item.logout-item:focus,
 .dropdown-item.logout-item:focus-visible {
-  background: #fee2e2;
+  background-color: var(--color-danger-bg);
   color: #991b1b;
+  outline: none;
+}
+
+.dropdown-item.logout-item:active {
+  background-color: var(--color-danger-border);
+  color: #7f1d1d;
 }
 
 .dropdown-divider {
@@ -1077,9 +1101,11 @@ body {
     padding: 8px 20px;
   }
   .dropdown-item:hover,
+  .dropdown-item:focus,
   .dropdown-item:focus-visible {
     background: var(--color-slate-800);
     color: var(--color-white);
+    outline: none;
   }
   .nav-actions {
     margin-left: auto;

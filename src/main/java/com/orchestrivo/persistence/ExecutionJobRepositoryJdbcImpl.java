@@ -100,6 +100,65 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
     }
 
     @Override
+    public List<ExecutionJobRecord> saveAll(List<ExecutionJobRecord> jobs) {
+        if (jobs == null || jobs.isEmpty()) {
+            return Collections.emptyList();
+        }
+        String sql = "INSERT INTO execution_jobs " +
+                "(owner_user_id, workload_id, algorithm_name, algorithm_parameters, input_snapshot, " +
+                "status, attempt_count, max_attempts, claimed_by, idempotency_key, batch_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        Connection conn = null;
+        try {
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                for (ExecutionJobRecord job : jobs) {
+                    ps.setLong(1, job.getOwnerUserId());
+                    ps.setLong(2, job.getWorkloadId());
+                    ps.setString(3, job.getAlgorithmName());
+                    ps.setString(4, job.getAlgorithmParameters());
+                    ps.setString(5, job.getInputSnapshot());
+                    ps.setString(6, job.getStatus() != null ? job.getStatus().name() : ExecutionJobStatus.QUEUED.name());
+                    ps.setInt(7, job.getAttemptCount());
+                    ps.setInt(8, job.getMaxAttempts() > 0 ? job.getMaxAttempts() : 3);
+                    ps.setString(9, job.getClaimedBy());
+                    ps.setString(10, job.getIdempotencyKey());
+                    ps.setString(11, job.getBatchId());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    int idx = 0;
+                    LocalDateTime now = LocalDateTime.now();
+                    while (rs.next() && idx < jobs.size()) {
+                        ExecutionJobRecord j = jobs.get(idx++);
+                        j.setId(rs.getLong(1));
+                        j.setCreatedAt(now);
+                    }
+                }
+            }
+            conn.commit();
+            return jobs;
+        } catch (SQLException e) {
+            if (conn != null) {
+                try { conn.rollback(); } catch (SQLException ignored) {}
+            }
+            throw new RuntimeException("Error batch saving execution jobs", e);
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException ignored) {}
+            }
+        }
+    }
+
+    @Override
     public Optional<ExecutionJobRecord> findById(long id) {
         String sql = "SELECT j.*, w.name AS workload_name " +
                 "FROM execution_jobs j " +
@@ -262,13 +321,113 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
     @Override
     public Optional<ExecutionJobRecord> claimNextQueuedJob(String workerId, int leaseDurationSeconds) {
         int safeDuration = Math.max(5, leaseDurationSeconds);
-        String findCandidatesSql = "SELECT id FROM execution_jobs WHERE status = 'QUEUED' ORDER BY id ASC LIMIT 20";
-        String claimSql = "UPDATE execution_jobs " +
+        String selectSql = "SELECT * FROM execution_jobs USE INDEX (idx_jobs_status_id) " +
+                "WHERE status = 'QUEUED' " +
+                "ORDER BY id ASC " +
+                "LIMIT 1 " +
+                "FOR UPDATE SKIP LOCKED";
+
+        String updateSql = "UPDATE execution_jobs " +
                 "SET status = 'RUNNING', claimed_by = ?, claim_token = ?, claimed_at = NOW(), " +
                 "lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND), " +
                 "started_at = IFNULL(started_at, NOW()), " +
                 "queue_wait_ms = IFNULL(queue_wait_ms, TIMESTAMPDIFF(MICROSECOND, created_at, NOW()) / 1000), " +
                 "attempt_count = attempt_count + 1 " +
+                "WHERE id = ? AND status = 'QUEUED'";
+
+        int maxRetries = 3;
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            Connection conn = null;
+            Integer prevIsolation = null;
+            try {
+                conn = dataSource.getConnection();
+                prevIsolation = conn.getTransactionIsolation();
+                conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+                conn.setAutoCommit(false);
+
+                ExecutionJobRecord job = null;
+                long candidateId = -1;
+
+                try (PreparedStatement psSelect = conn.prepareStatement(selectSql);
+                     ResultSet rs = psSelect.executeQuery()) {
+                    if (rs.next()) {
+                        job = mapRow(rs);
+                        candidateId = job.getId();
+                    }
+                }
+
+                if (job == null || candidateId <= 0) {
+                    conn.commit();
+                    return Optional.empty();
+                }
+
+                String token = UUID.randomUUID().toString();
+                try (PreparedStatement psUpdate = conn.prepareStatement(updateSql)) {
+                    psUpdate.setString(1, workerId);
+                    psUpdate.setString(2, token);
+                    psUpdate.setInt(3, safeDuration);
+                    psUpdate.setLong(4, candidateId);
+                    int updated = psUpdate.executeUpdate();
+                    if (updated == 1) {
+                        conn.commit();
+                        job.setStatus(ExecutionJobStatus.RUNNING);
+                        job.setClaimedBy(workerId);
+                        job.setClaimToken(token);
+                        job.setAttemptCount(job.getAttemptCount() + 1);
+                        LocalDateTime now = LocalDateTime.now();
+                        job.setClaimedAt(now);
+                        job.setLeaseExpiresAt(now.plusSeconds(safeDuration));
+                        if (job.getStartedAt() == null) {
+                            job.setStartedAt(now);
+                        }
+                        if (job.getCreatedAt() != null && job.getQueueWaitMs() == null) {
+                            long waitMs = java.time.Duration.between(job.getCreatedAt(), now).toMillis();
+                            job.setQueueWaitMs(Math.max(0L, waitMs));
+                        }
+                        return Optional.of(job);
+                    } else {
+                        conn.rollback();
+                        return Optional.empty();
+                    }
+                }
+            } catch (SQLException e) {
+                if (conn != null) {
+                    try { conn.rollback(); } catch (SQLException ignored) {}
+                }
+                boolean isDeadlock = e.getErrorCode() == 1213 || "40001".equals(e.getSQLState())
+                        || (e.getMessage() != null && e.getMessage().toLowerCase().contains("deadlock"));
+                if (isDeadlock && attempt < maxRetries - 1) {
+                    try {
+                        Thread.sleep(10 + (long)(Math.random() * 20));
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrupted during claim retry", ie);
+                    }
+                    continue;
+                }
+                throw new RuntimeException("Error atomically claiming queued job", e);
+            } finally {
+                if (conn != null) {
+                    try {
+                        if (prevIsolation != null) {
+                            conn.setTransactionIsolation(prevIsolation);
+                        }
+                        conn.setAutoCommit(true);
+                        conn.close();
+                    } catch (SQLException ignored) {}
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<ExecutionJobRecord> claimNextQueuedJobBaseline(String workerId, int leaseDurationSeconds) {
+        int safeDuration = Math.max(5, leaseDurationSeconds);
+        String findCandidatesSql = "SELECT id FROM execution_jobs WHERE status = 'QUEUED' ORDER BY id ASC LIMIT 5";
+        String claimSql = "UPDATE execution_jobs SET status = 'RUNNING', claimed_by = ?, claim_token = ?, " +
+                "claimed_at = NOW(), lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND), " +
+                "started_at = IFNULL(started_at, NOW()), attempt_count = attempt_count + 1 " +
                 "WHERE id = ? AND status = 'QUEUED'";
 
         try (Connection conn = dataSource.getConnection()) {
@@ -295,30 +454,27 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
             }
             return Optional.empty();
         } catch (SQLException e) {
-            throw new RuntimeException("Error atomically claiming queued job", e);
+            throw new RuntimeException("Error atomically claiming queued job (baseline)", e);
         }
     }
 
     @Override
     public boolean renewLease(long jobId, String claimToken, int durationSeconds) {
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
+        }
         int safeDuration = Math.max(5, durationSeconds);
         String sql = "UPDATE execution_jobs " +
                 "SET lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND) " +
-                "WHERE id = ? AND status = 'RUNNING' AND (? IS NULL OR claim_token = ? OR claim_token IS NULL)";
+                "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setInt(1, safeDuration);
             ps.setLong(2, jobId);
-            if (claimToken != null) {
-                ps.setString(3, claimToken);
-                ps.setString(4, claimToken);
-            } else {
-                ps.setNull(3, Types.VARCHAR);
-                ps.setNull(4, Types.VARCHAR);
-            }
-            return ps.executeUpdate() > 0;
+            ps.setString(3, claimToken.trim());
+            return ps.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new RuntimeException("Error renewing job lease for job: " + jobId, e);
         }
@@ -326,19 +482,19 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean markCompleted(long jobId, long experimentRunId, long durationMs) {
-        return markCompleted(jobId, null, experimentRunId, durationMs);
+        // Strict fencing requires the active attempt claim token; unfenced completions are rejected.
+        return false;
     }
 
     @Override
     public boolean markCompleted(long jobId, String claimToken, long experimentRunId, long durationMs) {
-        String whereClause = (claimToken != null)
-                ? "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?"
-                : "WHERE id = ? AND status = 'RUNNING'";
-
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
+        }
         String sql = "UPDATE execution_jobs " +
                 "SET status = 'COMPLETED', experiment_run_id = ?, execution_duration_ms = ?, " +
                 "completed_at = NOW(), claimed_by = NULL, claim_token = NULL, lease_expires_at = NULL " +
-                whereClause;
+                "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -346,10 +502,8 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
             ps.setLong(1, experimentRunId);
             ps.setLong(2, durationMs);
             ps.setLong(3, jobId);
-            if (claimToken != null) {
-                ps.setString(4, claimToken);
-            }
-            return ps.executeUpdate() > 0;
+            ps.setString(4, claimToken.trim());
+            return ps.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new RuntimeException("Error marking job completed: " + jobId, e);
         }
@@ -357,37 +511,33 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean markFailed(long jobId, String errorMessage, boolean willRetry) {
-        return markFailed(jobId, null, errorMessage, willRetry);
+        // Strict fencing requires the active attempt claim token; unfenced failure transitions are rejected.
+        return false;
     }
 
     @Override
     public boolean markFailed(long jobId, String claimToken, String errorMessage, boolean willRetry) {
-        String whereClause = (claimToken != null)
-                ? "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?"
-                : "WHERE id = ?";
-
-        String sql;
-        if (willRetry) {
-            sql = "UPDATE execution_jobs " +
-                    "SET status = 'QUEUED', error_message = ?, claimed_by = NULL, claimed_at = NULL, " +
-                    "claim_token = NULL, lease_expires_at = NULL " +
-                    whereClause;
-        } else {
-            sql = "UPDATE execution_jobs " +
-                    "SET status = 'FAILED', error_message = ?, completed_at = NOW(), claimed_by = NULL, " +
-                    "claim_token = NULL, lease_expires_at = NULL " +
-                    whereClause;
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
         }
+        String sql = willRetry
+                ? "UPDATE execution_jobs " +
+                  "SET status = CASE WHEN attempt_count < max_attempts THEN 'QUEUED' ELSE 'FAILED' END, " +
+                  "error_message = ?, claimed_by = NULL, claimed_at = NULL, claim_token = NULL, lease_expires_at = NULL, " +
+                  "completed_at = CASE WHEN attempt_count < max_attempts THEN NULL ELSE NOW() END " +
+                  "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?"
+                : "UPDATE execution_jobs " +
+                  "SET status = 'FAILED', error_message = ?, completed_at = NOW(), claimed_by = NULL, " +
+                  "claim_token = NULL, lease_expires_at = NULL " +
+                  "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, errorMessage);
             ps.setLong(2, jobId);
-            if (claimToken != null) {
-                ps.setString(3, claimToken);
-            }
-            return ps.executeUpdate() > 0;
+            ps.setString(3, claimToken.trim());
+            return ps.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new RuntimeException("Error marking job failed: " + jobId, e);
         }
@@ -400,6 +550,9 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs, long durationNanos) {
+        if (claimToken == null || claimToken.trim().isEmpty()) {
+            return false;
+        }
         String checkAndLockSql = "SELECT status, claim_token FROM execution_jobs WHERE id = ? FOR UPDATE";
         String insertRunSql = "INSERT INTO experiment_runs " +
                 "(owner_user_id, workload_id, algorithm_name, algorithm_parameters, input_snapshot, run_status, " +
@@ -409,14 +562,14 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
         String updateJobSql = "UPDATE execution_jobs " +
                 "SET status = 'COMPLETED', experiment_run_id = ?, execution_duration_ms = ?, execution_duration_nanos = ?, " +
                 "completed_at = NOW(), claimed_by = NULL, claim_token = NULL, lease_expires_at = NULL " +
-                "WHERE id = ? AND status = 'RUNNING' AND (? IS NULL OR claim_token = ? OR claim_token IS NULL)";
+                "WHERE id = ? AND status = 'RUNNING' AND claim_token = ?";
 
         Connection conn = null;
         try {
             conn = dataSource.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Verify job is still RUNNING and owned by claimToken
+            // 1. Verify job is still RUNNING and owned by exact non-null claimToken
             try (PreparedStatement psCheck = conn.prepareStatement(checkAndLockSql)) {
                 psCheck.setLong(1, jobId);
                 try (ResultSet rs = psCheck.executeQuery()) {
@@ -426,11 +579,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                     }
                     String currentStatus = rs.getString("status");
                     String currentToken = rs.getString("claim_token");
-                    if (!"RUNNING".equalsIgnoreCase(currentStatus)) {
-                        conn.rollback();
-                        return false;
-                    }
-                    if (claimToken != null && currentToken != null && !claimToken.equals(currentToken)) {
+                    if (!"RUNNING".equalsIgnoreCase(currentStatus) || currentToken == null || !claimToken.trim().equals(currentToken)) {
                         conn.rollback();
                         return false;
                     }
@@ -525,13 +674,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                 psUpdate.setLong(2, durationMs);
                 psUpdate.setLong(3, durationNanos);
                 psUpdate.setLong(4, jobId);
-                if (claimToken != null) {
-                    psUpdate.setString(5, claimToken);
-                    psUpdate.setString(6, claimToken);
-                } else {
-                    psUpdate.setNull(5, Types.VARCHAR);
-                    psUpdate.setNull(6, Types.VARCHAR);
-                }
+                psUpdate.setString(5, claimToken.trim());
                 int updated = psUpdate.executeUpdate();
                 if (updated == 1) {
                     conn.commit();
