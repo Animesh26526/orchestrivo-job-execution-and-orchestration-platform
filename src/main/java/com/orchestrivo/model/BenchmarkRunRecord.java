@@ -19,6 +19,8 @@ public class BenchmarkRunRecord {
     private double stdDevNanos;
     private boolean validationPassed;
     private String environmentInfo;
+    private String runType = "STANDARD";
+    private String benchmarkGroup;
     private LocalDateTime createdAt;
     private List<BenchmarkMeasurement> measurements = new ArrayList<>();
 
@@ -50,12 +52,20 @@ public class BenchmarkRunRecord {
     public void setValidationPassed(boolean validationPassed) { this.validationPassed = validationPassed; }
     public String getEnvironmentInfo() { return environmentInfo; }
     public void setEnvironmentInfo(String environmentInfo) { this.environmentInfo = environmentInfo; }
+    public String getRunType() { return runType != null ? runType : "STANDARD"; }
+    public void setRunType(String runType) { this.runType = runType; }
+    public String getBenchmarkGroup() { return benchmarkGroup; }
+    public void setBenchmarkGroup(String benchmarkGroup) { this.benchmarkGroup = benchmarkGroup; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
     public List<BenchmarkMeasurement> getMeasurements() { return measurements; }
     public void setMeasurements(List<BenchmarkMeasurement> measurements) {
         this.measurements = measurements != null ? new ArrayList<>(measurements) : new ArrayList<>();
+    }
+
+    public double getThroughputPerSecond() {
+        return medianNanos > 0 ? (1_000_000_000.0 / medianNanos) : 0.0;
     }
 
     public double getMedianMicros() { return medianNanos / 1_000.0; }

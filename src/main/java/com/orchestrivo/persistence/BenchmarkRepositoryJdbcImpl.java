@@ -10,13 +10,34 @@ import java.util.Optional;
 
 public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
 
+    private static volatile boolean schemaEnsured = false;
+
+    private void ensureSchema(Connection conn) {
+        if (schemaEnsured) return;
+        synchronized (BenchmarkRepositoryJdbcImpl.class) {
+            if (schemaEnsured) return;
+            try (Statement st = conn.createStatement()) {
+                try {
+                    st.execute("ALTER TABLE benchmark_runs ADD COLUMN run_type VARCHAR(50) NOT NULL DEFAULT 'STANDARD'");
+                } catch (SQLException ignored) {}
+                try {
+                    st.execute("ALTER TABLE benchmark_runs ADD COLUMN benchmark_group VARCHAR(100) NULL");
+                } catch (SQLException ignored) {}
+                schemaEnsured = true;
+            } catch (SQLException ignored) {
+                schemaEnsured = true;
+            }
+        }
+    }
+
     @Override
     public BenchmarkRunRecord save(BenchmarkRunRecord record) {
-        String sqlRun = "INSERT INTO benchmark_runs (owner_user_id, algorithm_name, process_count, seed, warmup_iterations, measured_iterations, median_nanos, min_nanos, max_nanos, std_dev_nanos, validation_passed, environment_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sqlRun = "INSERT INTO benchmark_runs (owner_user_id, algorithm_name, process_count, seed, warmup_iterations, measured_iterations, median_nanos, min_nanos, max_nanos, std_dev_nanos, validation_passed, environment_info, run_type, benchmark_group) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         Connection conn = null;
         try {
             conn = DataSourceManager.getDataSource().getConnection();
+            ensureSchema(conn);
             conn.setAutoCommit(false);
 
             try (PreparedStatement pstmt = conn.prepareStatement(sqlRun, Statement.RETURN_GENERATED_KEYS)) {
@@ -32,6 +53,8 @@ public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
                 pstmt.setDouble(10, record.getStdDevNanos());
                 pstmt.setBoolean(11, record.isValidationPassed());
                 pstmt.setString(12, record.getEnvironmentInfo());
+                pstmt.setString(13, record.getRunType());
+                pstmt.setString(14, record.getBenchmarkGroup());
 
                 pstmt.executeUpdate();
 
@@ -193,11 +216,66 @@ public class BenchmarkRepositoryJdbcImpl implements BenchmarkRepository {
         record.setValidationPassed(rs.getBoolean("validation_passed"));
         record.setEnvironmentInfo(rs.getString("environment_info"));
 
+        try {
+            String rt = rs.getString("run_type");
+            record.setRunType(rt != null ? rt : "STANDARD");
+        } catch (SQLException ignored) {
+            record.setRunType("STANDARD");
+        }
+
+        try {
+            record.setBenchmarkGroup(rs.getString("benchmark_group"));
+        } catch (SQLException ignored) {}
+
         Timestamp ts = rs.getTimestamp("created_at");
         if (ts != null) {
             record.setCreatedAt(ts.toLocalDateTime());
         }
         return record;
+    }
+
+    @Override
+    public List<BenchmarkRunRecord> findByRunType(long ownerUserId, String runType) {
+        String sql = "SELECT * FROM benchmark_runs WHERE owner_user_id = ? AND run_type = ? ORDER BY created_at DESC, id DESC";
+        List<BenchmarkRunRecord> list = new ArrayList<>();
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, ownerUserId);
+            pstmt.setString(2, runType != null ? runType : "STANDARD");
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    BenchmarkRunRecord record = mapRow(rs);
+                    loadMeasurements(conn, record);
+                    list.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error finding benchmark runs by run type", e);
+        }
+        return list;
+    }
+
+    @Override
+    public List<BenchmarkRunRecord> findByBenchmarkGroup(long ownerUserId, String benchmarkGroup) {
+        String sql = "SELECT * FROM benchmark_runs WHERE owner_user_id = ? AND benchmark_group = ? ORDER BY created_at DESC, id DESC";
+        List<BenchmarkRunRecord> list = new ArrayList<>();
+        try (Connection conn = DataSourceManager.getDataSource().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, ownerUserId);
+            pstmt.setString(2, benchmarkGroup);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    BenchmarkRunRecord record = mapRow(rs);
+                    loadMeasurements(conn, record);
+                    list.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error finding benchmark runs by benchmark group", e);
+        }
+        return list;
     }
 
     private void loadMeasurements(Connection conn, BenchmarkRunRecord record) throws SQLException {

@@ -9,8 +9,26 @@ import java.util.Optional;
 
 public class UserRepositoryJdbcImpl implements UserRepository {
 
+    public UserRepositoryJdbcImpl() {
+        ensureSchema();
+    }
 
-
+    private void ensureSchema() {
+        try (Connection conn = DataSourceManager.getDataSource().getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            boolean hasFullName = false;
+            try (ResultSet rs = meta.getColumns(null, null, "users", "full_name")) {
+                if (rs.next()) {
+                    hasFullName = true;
+                }
+            }
+            if (!hasFullName) {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.executeUpdate("ALTER TABLE users ADD COLUMN full_name VARCHAR(255) NULL AFTER email");
+                } catch (SQLException ignored) {}
+            }
+        } catch (Exception ignored) {}
+    }
 
     @Override
     public User save(User user) {
@@ -18,21 +36,22 @@ public class UserRepositoryJdbcImpl implements UserRepository {
         boolean isUpdate = user.getId() > 0;
         
         if (isUpdate) {
-            sql = "UPDATE users SET email = ?, password_hash = ?, role = ?, is_active = ? WHERE id = ?";
+            sql = "UPDATE users SET email = ?, full_name = ?, password_hash = ?, role = ?, is_active = ? WHERE id = ?";
         } else {
-            sql = "INSERT INTO users (email, password_hash, role, is_active) VALUES (?, ?, ?, ?)";
+            sql = "INSERT INTO users (email, full_name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?)";
         }
 
         try (Connection conn = DataSourceManager.getDataSource().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             
             pstmt.setString(1, user.getEmail());
-            pstmt.setString(2, user.getPasswordHash());
-            pstmt.setString(3, user.getRole());
-            pstmt.setBoolean(4, user.isActive());
+            pstmt.setString(2, user.getFullName());
+            pstmt.setString(3, user.getPasswordHash());
+            pstmt.setString(4, user.getRole());
+            pstmt.setBoolean(5, user.isActive());
             
             if (isUpdate) {
-                pstmt.setLong(5, user.getId());
+                pstmt.setLong(6, user.getId());
                 pstmt.executeUpdate();
             } else {
                 pstmt.executeUpdate();
@@ -121,6 +140,9 @@ public class UserRepositoryJdbcImpl implements UserRepository {
         User user = new User();
         user.setId(rs.getLong("id"));
         user.setEmail(rs.getString("email"));
+        try {
+            user.setFullName(rs.getString("full_name"));
+        } catch (SQLException ignored) {}
         user.setPasswordHash(rs.getString("password_hash"));
         user.setRole(rs.getString("role"));
         

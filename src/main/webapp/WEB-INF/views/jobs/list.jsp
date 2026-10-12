@@ -25,6 +25,7 @@
             <p class="page-subtitle">Persistent MySQL-backed asynchronous job engine and real-time execution worker status</p>
         </div>
         <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/jobs/batch" class="btn btn-secondary" style="margin-right: 8px;">&boxplus; Batch Run Algorithms</a>
             <a href="<%= request.getContextPath() %>/workloads" class="btn btn-primary">+ Run Experiment from Workload</a>
         </div>
     </div>
@@ -156,6 +157,13 @@
                                 <a href="<%= request.getContextPath() %>/workloads/view?id=${j.workloadId}">
                                     <c:out value="${j.workloadName}" default="Workload #${j.workloadId}"/>
                                 </a>
+                                <c:if test="${not empty j.batchId}">
+                                    <div style="margin-top: 2px;">
+                                        <a href="<%= request.getContextPath() %>/jobs/batch?batchId=${j.batchId}" class="badge badge-neutral" style="font-size: 10px; text-decoration: none;" title="Part of Batch ${j.batchId}">
+                                            &boxplus; Batch
+                                        </a>
+                                    </div>
+                                </c:if>
                             </td>
                             <td><strong><c:out value="${j.algorithmName}"/></strong></td>
                             <td>
@@ -173,7 +181,9 @@
                             </td>
                             <td>
                                 <c:choose>
-                                    <c:when test="${j.executionDurationMs != null}">${j.executionDurationMs} ms</c:when>
+                                    <c:when test="${j.executionDurationNanos != null or j.executionDurationMs != null}">
+                                        <span title="Wall-clock runtime"><c:out value="${j.formattedDuration}"/></span>
+                                    </c:when>
                                     <c:otherwise><span style="color:#94a3b8;">-</span></c:otherwise>
                                 </c:choose>
                             </td>

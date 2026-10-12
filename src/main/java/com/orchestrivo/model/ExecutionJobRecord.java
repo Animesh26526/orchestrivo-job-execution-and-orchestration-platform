@@ -25,9 +25,11 @@ public class ExecutionJobRecord {
     private LocalDateTime completedAt;
     private Long queueWaitMs;
     private Long executionDurationMs;
+    private Long executionDurationNanos;
     private String errorMessage;
     private Long experimentRunId;
     private String idempotencyKey;
+    private String batchId;
 
     // Associated UI helper data
     private String workloadName;
@@ -162,6 +164,41 @@ public class ExecutionJobRecord {
         this.executionDurationMs = executionDurationMs;
     }
 
+    public Long getExecutionDurationNanos() {
+        return executionDurationNanos;
+    }
+
+    public void setExecutionDurationNanos(Long executionDurationNanos) {
+        this.executionDurationNanos = executionDurationNanos;
+        if (executionDurationNanos != null && (this.executionDurationMs == null || this.executionDurationMs == 0)) {
+            this.executionDurationMs = executionDurationNanos / 1_000_000;
+        }
+    }
+
+    public String getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.batchId = batchId;
+    }
+
+    public String getFormattedDuration() {
+        if (executionDurationNanos != null && executionDurationNanos > 0) {
+            if (executionDurationNanos < 1_000_000) {
+                return String.format(java.util.Locale.US, "%.1f µs (%.3f ms)", executionDurationNanos / 1000.0, executionDurationNanos / 1_000_000.0);
+            } else if (executionDurationNanos < 1_000_000_000) {
+                return String.format(java.util.Locale.US, "%.2f ms", executionDurationNanos / 1_000_000.0);
+            } else {
+                return String.format(java.util.Locale.US, "%.3f s", executionDurationNanos / 1_000_000_000.0);
+            }
+        }
+        if (executionDurationMs != null) {
+            return executionDurationMs + " ms";
+        }
+        return "—";
+    }
+
     public String getErrorMessage() {
         return errorMessage;
     }
@@ -211,15 +248,7 @@ public class ExecutionJobRecord {
     }
 
     public List<com.orchestrivo.domain.ProcessSpec> getSnapshotProcesses() {
-        if (inputSnapshot == null || inputSnapshot.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        try {
-            java.lang.reflect.Type listType = new com.google.gson.reflect.TypeToken<List<com.orchestrivo.domain.ProcessSpec>>(){}.getType();
-            return new com.google.gson.Gson().fromJson(inputSnapshot, listType);
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
+        return WorkloadSnapshot.extractProcesses(inputSnapshot);
     }
 
     public String getFormattedParameters() {

@@ -54,10 +54,7 @@ public class ExperimentService {
         record.setAlgorithmParameters(new Gson().toJson(params));
 
         // Create immutable process snapshot
-        String snapshotJson = "[]";
-        if (workload != null && workload.getProcesses() != null) {
-            snapshotJson = new Gson().toJson(workload.getProcesses());
-        }
+        String snapshotJson = com.orchestrivo.model.WorkloadSnapshot.serialize(workload, null);
         record.setInputSnapshot(snapshotJson);
 
         record.setStartedAt(LocalDateTime.now());
@@ -129,9 +126,6 @@ public class ExperimentService {
         }
 
         List<ExperimentRunRecord> runs = new ArrayList<>();
-        String firstSnapshot = null;
-        boolean compatible = true;
-        String compatibilityMessage = "All compared runs were executed on identical workload inputs.";
 
         for (Long id : runIds) {
             if (id == null) continue;
@@ -144,19 +138,41 @@ public class ExperimentService {
                 throw new SecurityException("Unauthorized access to experiment run " + id);
             }
             runs.add(run);
+        }
 
+        // Determine comparison mode (Mode A, Mode B, or Mode C)
+        boolean identicalSnapshots = true;
+        boolean sameAlgorithm = true;
+        String firstSnapshot = null;
+        String firstAlgo = runs.get(0).getAlgorithmName();
+
+        for (ExperimentRunRecord run : runs) {
             String snap = run.getInputSnapshot();
             if (snap == null || snap.trim().isEmpty()) {
-                // If old run before migration had no snapshot, fall back to checking workload ID
                 snap = "workload_id:" + run.getWorkloadId();
             }
-
             if (firstSnapshot == null) {
                 firstSnapshot = snap;
-            } else if (!firstSnapshot.equals(snap)) {
-                compatible = false;
-                compatibilityMessage = "Incompatible workloads: The selected runs were executed on different workloads or different process specifications. Controlled comparison requires identical workload inputs.";
+            } else if (!com.orchestrivo.model.WorkloadSnapshot.areSnapshotsEquivalent(firstSnapshot, snap)) {
+                identicalSnapshots = false;
             }
+
+            if (run.getAlgorithmName() == null || !run.getAlgorithmName().equalsIgnoreCase(firstAlgo)) {
+                sameAlgorithm = false;
+            }
+        }
+
+        com.orchestrivo.model.ComparisonMode mode;
+        String compatibilityMessage;
+        if (identicalSnapshots) {
+            mode = com.orchestrivo.model.ComparisonMode.MODE_A_CONTROLLED;
+            compatibilityMessage = "Mode A (Controlled): All compared runs were executed on identical workload inputs. Best performers per metric are highlighted.";
+        } else if (sameAlgorithm) {
+            mode = com.orchestrivo.model.ComparisonMode.MODE_B_WORKLOAD_SCALING;
+            compatibilityMessage = "Mode B (Workload Scaling): Same algorithm evaluated across different workloads or process counts. Metrics reflect problem size scaling.";
+        } else {
+            mode = com.orchestrivo.model.ComparisonMode.MODE_C_EXPLORATORY;
+            compatibilityMessage = "Mode C (Exploratory): Incompatible workloads: The selected runs were executed on different workloads or different process specifications. Controlled comparison requires identical workload inputs.";
         }
 
         String tradeOffNotes = "Scheduling Trade-Off Observations:\n"
@@ -166,6 +182,6 @@ public class ExperimentService {
                 + "- FCFS (First-Come, First-Served) is non-preemptive and simple, but suffers from the convoy effect when long processes arrive early.\n"
                 + "Note: These represent general theoretical trade-offs; actual results depend entirely on the specific process arrival and burst distribution.";
 
-        return new com.orchestrivo.model.ComparisonResult(runs, compatible, compatibilityMessage, tradeOffNotes);
+        return new com.orchestrivo.model.ComparisonResult(runs, mode, compatibilityMessage, tradeOffNotes);
     }
 }

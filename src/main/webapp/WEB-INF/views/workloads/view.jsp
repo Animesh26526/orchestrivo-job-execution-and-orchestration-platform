@@ -28,6 +28,8 @@
         </div>
         <div class="page-actions">
             <a href="<%= request.getContextPath() %>/workloads" class="btn btn-secondary">&larr; Back to Workloads</a>
+            <a href="<%= request.getContextPath() %>/jobs/batch?workloadId=${workload.id}" class="btn btn-primary">&boxplus; Batch Run Algorithms</a>
+            <a href="<%= request.getContextPath() %>/experiments/new?workloadId=${workload.id}" class="btn btn-secondary">Run Single Algorithm</a>
             <a href="<%= request.getContextPath() %>/workloads/edit?id=${workload.id}" class="btn btn-secondary">Edit Workload</a>
             <a href="<%= request.getContextPath() %>/workloads/export?id=${workload.id}" class="btn btn-outline">Export CSV</a>
         </div>
@@ -57,7 +59,9 @@
                         <td>
                             <c:out value="${workload.sourceType}"/>
                             <c:if test="${not empty workload.generationSeed}">
-                                &bull; Deterministic Seed: <code>${workload.generationSeed}</code>
+                                &bull; Deterministic Seed: <code id="seedDisplay">${workload.generationSeed}</code>
+                                <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 2px 8px; margin-left: 6px;" onclick="navigator.clipboard.writeText('${workload.generationSeed}').then(() => alert('Seed copied to clipboard!'))">📋 Copy</button>
+                                <a href="<%= request.getContextPath() %>/workloads/generate?seed=${workload.generationSeed}" class="btn btn-secondary" style="font-size: 11px; padding: 2px 8px; margin-left: 4px;">🔄 Reproduce</a>
                             </c:if>
                         </td>
                     </tr>

@@ -12,6 +12,12 @@ public class WorkloadGenerator {
     public static final int MIN_PROCESS_COUNT = 1;
     public static final int MAX_PROCESS_COUNT = 200;
 
+    public static long generateSecureSeed() {
+        java.security.SecureRandom sr = new java.security.SecureRandom();
+        long seed = sr.nextLong();
+        return seed == Long.MIN_VALUE ? 1L : Math.abs(seed);
+    }
+
     public static class GeneratorConfig {
         private String name;
         private int processCount;
@@ -21,7 +27,13 @@ public class WorkloadGenerator {
         private int maxBurst;
         private long seed;
 
-        public GeneratorConfig() {}
+        public GeneratorConfig() {
+            this.seed = generateSecureSeed();
+        }
+
+        public GeneratorConfig(String name, int processCount, int minArrival, int maxArrival, int minBurst, int maxBurst) {
+            this(name, processCount, minArrival, maxArrival, minBurst, maxBurst, generateSecureSeed());
+        }
 
         public GeneratorConfig(String name, int processCount, int minArrival, int maxArrival, int minBurst, int maxBurst, long seed) {
             this.name = name;

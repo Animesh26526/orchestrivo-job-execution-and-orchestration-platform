@@ -10,5 +10,7 @@ public interface BenchmarkRepository {
     List<BenchmarkRunRecord> findByOwnerId(long ownerUserId);
     List<BenchmarkRunRecord> findWithFilter(long ownerUserId, int offset, int limit);
     int countByOwnerId(long ownerUserId);
+    List<BenchmarkRunRecord> findByRunType(long ownerUserId, String runType);
+    List<BenchmarkRunRecord> findByBenchmarkGroup(long ownerUserId, String benchmarkGroup);
     void deleteById(long id);
 }

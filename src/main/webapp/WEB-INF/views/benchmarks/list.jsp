@@ -25,6 +25,7 @@
             <p class="page-subtitle">Compare recorded algorithm execution latencies across synthetic workloads and iterations</p>
         </div>
         <div class="page-actions">
+            <a href="<%= request.getContextPath() %>/benchmarks/compare" class="btn btn-secondary">⇄ Compare Runs</a>
             <a href="<%= request.getContextPath() %>/benchmarks/run" class="btn btn-primary">+ Run New Benchmark</a>
         </div>
     </div>
@@ -45,6 +46,7 @@
                         <tr>
                             <th>Benchmark ID</th>
                             <th>Algorithm</th>
+                            <th>Type</th>
                             <th>Process Count</th>
                             <th>Warmup / Measured</th>
                             <th>Median (&micro;s)</th>
@@ -61,6 +63,11 @@
                         <tr>
                             <td><strong><a href="<%= request.getContextPath() %>/benchmarks/view?id=${b.id}">#${b.id}</a></strong></td>
                             <td><strong><c:out value="${b.algorithmName}"/></strong></td>
+                            <td>
+                                <span class="badge ${b.runType == 'BASELINE' ? 'badge-primary' : (b.runType == 'CANDIDATE' ? 'badge-success' : 'badge-neutral')}">
+                                    <c:out value="${b.runType}"/>
+                                </span>
+                            </td>
                             <td>${b.processCount}</td>
                             <td>${b.warmupIterations} / ${b.measuredIterations}</td>
                             <td><strong>${b.medianMicros} &micro;s</strong></td>
@@ -75,6 +82,7 @@
                             <td><c:out value="${b.createdAt}"/></td>
                             <td class="actions-cell">
                                 <div class="table-actions-group">
+                                    <a href="<%= request.getContextPath() %>/benchmarks/compare?${b.runType == 'CANDIDATE' ? 'candidateId' : 'baselineId'}=${b.id}" class="btn btn-sm btn-secondary">⇄ Compare</a>
                                     <a href="<%= request.getContextPath() %>/benchmarks/view?id=${b.id}" class="btn btn-sm btn-secondary">Report</a>
                                     <form action="<%= request.getContextPath() %>/benchmarks/delete" method="post" style="display:inline;">
                                         <input type="hidden" name="csrfToken" value="<c:out value='${sessionScope.csrfToken}'/>"/>

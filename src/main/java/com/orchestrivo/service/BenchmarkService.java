@@ -49,6 +49,8 @@ public class BenchmarkService {
         private long seed = 42L;
         private int warmupIterations = 5;
         private int measuredIterations = 15;
+        private String runType = "STANDARD";
+        private String benchmarkGroup;
 
         public BenchmarkConfig() {}
 
@@ -72,6 +74,10 @@ public class BenchmarkService {
         public void setWarmupIterations(int warmupIterations) { this.warmupIterations = warmupIterations; }
         public int getMeasuredIterations() { return measuredIterations; }
         public void setMeasuredIterations(int measuredIterations) { this.measuredIterations = measuredIterations; }
+        public String getRunType() { return runType != null ? runType : "STANDARD"; }
+        public void setRunType(String runType) { this.runType = runType; }
+        public String getBenchmarkGroup() { return benchmarkGroup; }
+        public void setBenchmarkGroup(String benchmarkGroup) { this.benchmarkGroup = benchmarkGroup; }
     }
 
     public void validateConfig(BenchmarkConfig config) {
@@ -197,6 +203,8 @@ public class BenchmarkService {
         record.setStdDevNanos(stdDev);
         record.setValidationPassed(allValid);
         record.setEnvironmentInfo(new Gson().toJson(env));
+        record.setRunType(config.getRunType() != null ? config.getRunType() : "STANDARD");
+        record.setBenchmarkGroup(config.getBenchmarkGroup());
         record.setMeasurements(measurements);
 
         return benchmarkRepository.save(record);
@@ -242,5 +250,31 @@ public class BenchmarkService {
             return opt;
         }
         return Optional.empty();
+    }
+
+    public com.orchestrivo.model.BenchmarkComparisonResult compareRuns(BenchmarkRunRecord baseline, BenchmarkRunRecord candidate) {
+        return new com.orchestrivo.model.BenchmarkComparisonResult(baseline, candidate);
+    }
+
+    public com.orchestrivo.model.BenchmarkComparisonResult compareRuns(long baselineId, long candidateId, long userId) {
+        Optional<BenchmarkRunRecord> baseOpt = getBenchmarkById(baselineId, userId);
+        if (baseOpt.isEmpty()) {
+            throw new IllegalArgumentException("Baseline benchmark run #" + baselineId + " not found or unauthorized.");
+        }
+        Optional<BenchmarkRunRecord> candOpt = getBenchmarkById(candidateId, userId);
+        if (candOpt.isEmpty()) {
+            throw new IllegalArgumentException("Candidate benchmark run #" + candidateId + " not found or unauthorized.");
+        }
+        return compareRuns(baseOpt.get(), candOpt.get());
+    }
+
+    public List<BenchmarkRunRecord> getBaselineRuns(long userId) {
+        if (benchmarkRepository == null) return Collections.emptyList();
+        return benchmarkRepository.findByRunType(userId, "BASELINE");
+    }
+
+    public List<BenchmarkRunRecord> getRunsByGroup(long userId, String group) {
+        if (benchmarkRepository == null || group == null) return Collections.emptyList();
+        return benchmarkRepository.findByBenchmarkGroup(userId, group);
     }
 }

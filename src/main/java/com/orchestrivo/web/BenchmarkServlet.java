@@ -13,7 +13,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-@WebServlet({"/benchmarks", "/benchmarks/run", "/benchmarks/view", "/benchmarks/delete"})
+@WebServlet({"/benchmarks", "/benchmarks/run", "/benchmarks/view", "/benchmarks/compare", "/benchmarks/delete"})
 public class BenchmarkServlet extends HttpServlet {
 
     @Override
@@ -22,9 +22,12 @@ public class BenchmarkServlet extends HttpServlet {
         User user = (User) req.getSession().getAttribute("user");
 
         if ("/benchmarks/run".equals(path)) {
+            req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
             req.getRequestDispatcher("/WEB-INF/views/benchmarks/new.jsp").forward(req, resp);
         } else if ("/benchmarks/view".equals(path)) {
             handleViewGet(req, resp, user);
+        } else if ("/benchmarks/compare".equals(path)) {
+            handleCompareGet(req, resp, user);
         } else {
             handleListGet(req, resp, user);
         }
@@ -169,20 +172,92 @@ public class BenchmarkServlet extends HttpServlet {
                 throw new IllegalArgumentException("Measured iterations must be a valid integer between 1 and 1000.");
             }
 
+            String rt = req.getParameter("runType");
+            if (rt != null && !rt.trim().isEmpty()) {
+                config.setRunType(rt.trim().toUpperCase());
+            }
+
+            String bg = req.getParameter("benchmarkGroup");
+            if (bg != null && !bg.trim().isEmpty()) {
+                config.setBenchmarkGroup(bg.trim());
+            }
+
             BenchmarkRunRecord run = ServiceRegistry.benchmarkService.runBenchmark(user.getId(), config);
             if (ServiceRegistry.auditService != null) {
                 ServiceRegistry.auditService.log(user.getId(), "BENCHMARK_RUN", "BENCHMARK_RUN", String.valueOf(run.getId()),
-                        Map.of("algorithm", run.getAlgorithmName(), "processCount", run.getProcessCount(), "medianMicros", run.getMedianMicros()));
+                        Map.of("algorithm", run.getAlgorithmName(), "processCount", run.getProcessCount(), "medianMicros", run.getMedianMicros(), "runType", run.getRunType()));
             }
             resp.sendRedirect(req.getContextPath() + "/benchmarks/view?id=" + run.getId());
         } catch (IllegalArgumentException e) {
             req.setAttribute("error", e.getMessage());
             req.setAttribute("config", config);
+            req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
             req.getRequestDispatcher("/WEB-INF/views/benchmarks/new.jsp").forward(req, resp);
         } catch (Exception e) {
             req.setAttribute("error", "An error occurred while executing the benchmark: " + (e.getMessage() != null ? e.getMessage() : "Unknown error"));
             req.setAttribute("config", config);
+            req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
             req.getRequestDispatcher("/WEB-INF/views/benchmarks/new.jsp").forward(req, resp);
+        }
+    }
+
+    private void handleCompareGet(HttpServletRequest req, HttpServletResponse resp, User user) throws ServletException, IOException {
+        String baseParam = req.getParameter("baselineId");
+        String candParam = req.getParameter("candidateId");
+
+        if (baseParam == null || candParam == null || baseParam.trim().isEmpty() || candParam.trim().isEmpty()) {
+            PagedResult<BenchmarkRunRecord> all = ServiceRegistry.benchmarkService.getBenchmarksPaged(user.getId(), 1, 100);
+            req.setAttribute("benchmarks", all.getItems());
+            req.setAttribute("baselines", ServiceRegistry.benchmarkService.getBaselineRuns(user.getId()));
+            req.getRequestDispatcher("/WEB-INF/views/benchmarks/compare.jsp").forward(req, resp);
+            return;
+        }
+
+        try {
+            long baselineId = Long.parseLong(baseParam.trim());
+            long candidateId = Long.parseLong(candParam.trim());
+
+            com.orchestrivo.model.BenchmarkComparisonResult comparison = ServiceRegistry.benchmarkService.compareRuns(baselineId, candidateId, user.getId());
+
+            String export = req.getParameter("export");
+            if ("csv".equalsIgnoreCase(export)) {
+                resp.setContentType("text/csv; charset=UTF-8");
+                resp.setHeader("Content-Disposition", "attachment; filename=\"benchmark-comparison-" + baselineId + "-vs-" + candidateId + ".csv\"");
+                java.io.PrintWriter writer = resp.getWriter();
+                writer.println("Metric,Baseline (Run #" + baselineId + "),Candidate (Run #" + candidateId + "),Absolute Delta,Percentage Delta");
+                writer.printf(java.util.Locale.US, "Median Duration (µs),%.3f,%.3f,%.3f,%.2f%%\n",
+                        comparison.getBaseline().getMedianMicros(), comparison.getCandidate().getMedianMicros(),
+                        comparison.getDeltaMedianNanos() / 1000.0, comparison.getDeltaMedianPct());
+                writer.printf(java.util.Locale.US, "Mean Duration (µs),%.3f,%.3f,%.3f,%.2f%%\n",
+                        comparison.getBaseline().getMeanMicros(), comparison.getCandidate().getMeanMicros(),
+                        comparison.getDeltaMeanNanos() / 1000.0, comparison.getDeltaMeanPct());
+                writer.printf(java.util.Locale.US, "Min Duration (µs),%.3f,%.3f,%.3f,N/A\n",
+                        comparison.getBaseline().getMinMicros(), comparison.getCandidate().getMinMicros(),
+                        comparison.getDeltaMinNanos() / 1000.0);
+                writer.printf(java.util.Locale.US, "Max Duration (µs),%.3f,%.3f,%.3f,N/A\n",
+                        comparison.getBaseline().getMaxMicros(), comparison.getCandidate().getMaxMicros(),
+                        comparison.getDeltaMaxNanos() / 1000.0);
+                writer.printf(java.util.Locale.US, "Std Deviation (µs),%.3f,%.3f,%.3f,%.2f%%\n",
+                        comparison.getBaseline().getStdDevMicros(), comparison.getCandidate().getStdDevMicros(),
+                        comparison.getDeltaStdDevNanos() / 1000.0, comparison.getDeltaStdDevPct());
+                writer.printf(java.util.Locale.US, "Throughput (runs/sec),%.1f,%.1f,%.1f,%.2f%%\n",
+                        comparison.getBaselineThroughput(), comparison.getCandidateThroughput(),
+                        comparison.getCandidateThroughput() - comparison.getBaselineThroughput(), comparison.getDeltaThroughputPct());
+                writer.printf(java.util.Locale.US, "Speedup Factor,1.0x,%.2fx,N/A,N/A\n",
+                        comparison.getSpeedupFactor());
+                writer.flush();
+                return;
+            }
+
+            req.setAttribute("comparison", comparison);
+            req.getRequestDispatcher("/WEB-INF/views/benchmarks/compare.jsp").forward(req, resp);
+
+        } catch (NumberFormatException e) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid benchmark comparison ID.");
+        } catch (IllegalArgumentException e) {
+            resp.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
+        } catch (SecurityException e) {
+            resp.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
         }
     }
 

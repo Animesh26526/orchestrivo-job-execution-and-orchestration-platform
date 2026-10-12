@@ -63,9 +63,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="seed">Random Seed (Long)</label>
-                    <input type="number" id="seed" name="seed" class="form-input" value="42" required>
-                    <div class="form-hint">Identical seed creates identical processes</div>
+                    <label class="form-label" for="seed">
+                        Pseudo-Random Seed <span style="font-weight: normal; color: var(--color-slate-500);">(Optional)</span>
+                    </label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="number" id="seed" name="seed" class="form-input" value="<c:out value='${param.seed}'/>" placeholder="Leave empty to auto-generate">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('seed').value = Math.floor(Math.random() * 9000000000) + 1000000000;" title="Generate random seed" style="white-space: nowrap; padding: 0 10px;">🎲 Random</button>
+                    </div>
+                    <div class="form-hint">Leave blank to automatically generate a cryptographic seed, or enter a number for exact reproducibility.</div>
                 </div>
             </div>
 

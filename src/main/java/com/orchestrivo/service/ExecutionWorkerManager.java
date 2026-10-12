@@ -183,9 +183,8 @@ public class ExecutionWorkerManager {
                 } catch (Exception ignored) {}
             }
 
-            // 2. Deserialize immutable snapshot
-            Type processListType = new TypeToken<List<ProcessSpec>>(){}.getType();
-            List<ProcessSpec> processes = new Gson().fromJson(job.getInputSnapshot(), processListType);
+            // 2. Deserialize immutable snapshot (supporting versioned object and legacy raw array)
+            List<ProcessSpec> processes = com.orchestrivo.model.WorkloadSnapshot.extractProcesses(job.getInputSnapshot());
             if (processes == null || processes.isEmpty()) {
                 throw new IllegalArgumentException("Job input snapshot contains zero process specifications.");
             }
@@ -206,7 +205,8 @@ public class ExecutionWorkerManager {
             // 4. Validate output schedule
             ValidationResult validation = validator.validate(workload, result);
 
-            long executionDurationMs = Math.max(1, (System.nanoTime() - startNanos) / 1_000_000);
+            long executionDurationNanos = Math.max(1L, System.nanoTime() - startNanos);
+            long executionDurationMs = executionDurationNanos / 1_000_000;
 
             // 5. Prepare experiment run record
             ExperimentRunRecord runRecord = new ExperimentRunRecord();
@@ -224,12 +224,12 @@ public class ExecutionWorkerManager {
                 runRecord.setRunStatus("SUCCEEDED");
 
                 // 6. Atomically complete job with experiment run record
-                boolean completed = jobRepository.completeJobWithExperimentRun(job.getId(), job.getClaimToken(), runRecord, executionDurationMs);
+                boolean completed = jobRepository.completeJobWithExperimentRun(job.getId(), job.getClaimToken(), runRecord, executionDurationMs, executionDurationNanos);
                 if (completed) {
                     if (auditService != null) {
                         auditService.log(job.getOwnerUserId(), "JOB_COMPLETED", "EXECUTION_JOB",
                                 String.valueOf(job.getId()),
-                                Map.of("algorithm", job.getAlgorithmName(), "durationMs", executionDurationMs, "experimentRunId", runRecord.getId()));
+                                Map.of("algorithm", job.getAlgorithmName(), "durationMs", executionDurationMs, "durationNanos", executionDurationNanos, "experimentRunId", runRecord.getId()));
                     }
                 } else {
                     System.err.println("[ExecutionWorkerManager] Job #" + job.getId() + " claim token expired or was reclaimed before completion; transaction aborted.");

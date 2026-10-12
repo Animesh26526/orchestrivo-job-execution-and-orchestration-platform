@@ -59,6 +59,23 @@
 
             <div class="form-grid-2">
                 <div class="form-group">
+                    <label class="form-label" for="runType">Run Designation / Type:</label>
+                    <select id="runType" name="runType" class="form-select">
+                        <option value="STANDARD" ${config.runType == 'STANDARD' ? 'selected' : ''}>Standard Benchmark</option>
+                        <option value="BASELINE" ${config.runType == 'BASELINE' ? 'selected' : ''}>Baseline (Reference 'Before' Run)</option>
+                        <option value="CANDIDATE" ${config.runType == 'CANDIDATE' ? 'selected' : ''}>Candidate (Optimized 'After' Run)</option>
+                    </select>
+                    <div class="form-hint">Allows pairwise before/after comparison</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="benchmarkGroup">Benchmark Group / Tag (Optional):</label>
+                    <input type="text" id="benchmarkGroup" name="benchmarkGroup" class="form-input" value="<c:out value='${config.benchmarkGroup}'/>" placeholder="e.g. stage4-hardening">
+                    <div class="form-hint">Identifier linking baseline and candidate runs</div>
+                </div>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
                     <label class="form-label" for="processCount">Process Count (1 - 500):</label>
                     <input type="number" id="processCount" name="processCount" class="form-input" value="${config.processCount != 0 ? config.processCount : 50}" min="1" max="500" required/>
                 </div>

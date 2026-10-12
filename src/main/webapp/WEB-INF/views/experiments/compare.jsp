@@ -23,6 +23,16 @@
             vertical-align: middle;
             font-weight: 600;
         }
+        .delta-pill {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 4px;
+            background: #f1f5f9;
+            color: #475569;
+        }
     </style>
 </head>
 <body>
@@ -55,21 +65,32 @@
         </div>
     </div>
 
-    <!-- Compatibility Status Banner -->
+    <!-- Mode Badge & Compatibility Status Banner -->
     <c:choose>
-        <c:when test="${comparison.compatible}">
-            <div class="alert alert-success">
+        <c:when test="${comparison.mode == 'MODE_A_CONTROLLED'}">
+            <div class="alert alert-success" style="display: flex; align-items: flex-start; gap: 14px;">
+                <span class="badge badge-success" style="font-size: 12px; padding: 6px 10px; white-space: nowrap;">Mode A: Controlled</span>
                 <div>
-                    <strong>Workload Compatibility Verified:</strong>
-                    <p style="margin-top: 4px;"><c:out value="${comparison.compatibilityMessage}"/></p>
+                    <strong>Controlled Benchmark Comparison:</strong>
+                    <p style="margin-top: 4px; margin-bottom: 0;"><c:out value="${comparison.compatibilityMessage}"/></p>
+                </div>
+            </div>
+        </c:when>
+        <c:when test="${comparison.mode == 'MODE_B_WORKLOAD_SCALING'}">
+            <div class="alert alert-info" style="display: flex; align-items: flex-start; gap: 14px;">
+                <span class="badge badge-primary" style="font-size: 12px; padding: 6px 10px; white-space: nowrap;">Mode B: Workload Scaling</span>
+                <div>
+                    <strong>Workload Scaling Analysis:</strong>
+                    <p style="margin-top: 4px; margin-bottom: 0;"><c:out value="${comparison.compatibilityMessage}"/></p>
                 </div>
             </div>
         </c:when>
         <c:otherwise>
-            <div class="alert alert-warning">
+            <div class="alert alert-warning" style="display: flex; align-items: flex-start; gap: 14px;">
+                <span class="badge badge-warning" style="font-size: 12px; padding: 6px 10px; white-space: nowrap;">Mode C: Exploratory</span>
                 <div>
-                    <strong>Uncontrolled Comparison Warning:</strong>
-                    <p style="margin-top: 4px;"><c:out value="${comparison.compatibilityMessage}"/></p>
+                    <strong>Exploratory / Incompatible Workload Notice:</strong>
+                    <p style="margin-top: 4px; margin-bottom: 0;"><c:out value="${comparison.compatibilityMessage}"/></p>
                 </div>
             </div>
         </c:otherwise>
@@ -80,7 +101,19 @@
         <div class="card-header">
             <div>
                 <h2 class="card-title">Comparative Performance Matrix</h2>
-                <p class="card-description">Lowest waiting and turnaround times are highlighted as best performers for this specific workload.</p>
+                <p class="card-description">
+                    <c:choose>
+                        <c:when test="${comparison.mode == 'MODE_A_CONTROLLED'}">
+                            Identical workloads: lowest waiting &amp; turnaround times and highest throughput are highlighted as best performers.
+                        </c:when>
+                        <c:when test="${comparison.mode == 'MODE_B_WORKLOAD_SCALING'}">
+                            Same algorithm across varying workloads. Percentage deltas indicate scaling relative to Run #${comparison.runs[0].id}.
+                        </c:when>
+                        <c:otherwise>
+                            Differing algorithms and workloads. Deltas relative to Run #${comparison.runs[0].id} provided for exploratory analysis only.
+                        </c:otherwise>
+                    </c:choose>
+                </p>
             </div>
         </div>
         <div class="table-responsive" style="margin: 0; box-shadow: none; border: none;">
@@ -88,11 +121,12 @@
                 <thead>
                     <tr>
                         <th style="width: 220px;">Metric / Property</th>
-                        <c:forEach var="run" items="${comparison.runs}">
+                        <c:forEach var="run" items="${comparison.runs}" varStatus="status">
                             <th>
                                 <strong><c:out value="${run.algorithmName}"/></strong><br/>
                                 <small style="color: var(--color-slate-500); font-weight: normal;">
                                     <a href="<%= request.getContextPath() %>/experiments/view?id=${run.id}">Run #${run.id}</a> (WL #${run.workloadId})
+                                    <c:if test="${status.first}"><span class="badge badge-secondary" style="margin-left: 4px; font-size: 10px;">BASELINE</span></c:if>
                                 </small>
                             </th>
                         </c:forEach>
@@ -128,34 +162,49 @@
                     <tr>
                         <td style="font-weight: 600;">Average Waiting Time</td>
                         <c:forEach var="run" items="${comparison.runs}">
-                            <td class="${run.id == comparison.minWaitingRunId ? 'highlight-winner' : ''}">
-                                <c:out value="${run.result != null ? run.result.aggregateMetrics.averageWaitingTime : 'N/A'}"/>
-                                <c:if test="${run.id == comparison.minWaitingRunId}"><span class="tag-winner">LOWEST</span></c:if>
+                            <td class="${(comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minWaitingRunId) ? 'highlight-winner' : ''}">
+                                <div><c:out value="${run.result != null ? run.result.aggregateMetrics.averageWaitingTime : 'N/A'}"/>
+                                <c:if test="${comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minWaitingRunId}"><span class="tag-winner">LOWEST</span></c:if></div>
+                                <div><span class="delta-pill">Δ ${comparison.getWaitDelta(run)}</span></div>
                             </td>
                         </c:forEach>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Average Turnaround Time</td>
                         <c:forEach var="run" items="${comparison.runs}">
-                            <td class="${run.id == comparison.minTurnaroundRunId ? 'highlight-winner' : ''}">
-                                <c:out value="${run.result != null ? run.result.aggregateMetrics.averageTurnaroundTime : 'N/A'}"/>
-                                <c:if test="${run.id == comparison.minTurnaroundRunId}"><span class="tag-winner">LOWEST</span></c:if>
+                            <td class="${(comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minTurnaroundRunId) ? 'highlight-winner' : ''}">
+                                <div><c:out value="${run.result != null ? run.result.aggregateMetrics.averageTurnaroundTime : 'N/A'}"/>
+                                <c:if test="${comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minTurnaroundRunId}"><span class="tag-winner">LOWEST</span></c:if></div>
+                                <div><span class="delta-pill">Δ ${comparison.getTurnaroundDelta(run)}</span></div>
                             </td>
                         </c:forEach>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Average Response Time</td>
                         <c:forEach var="run" items="${comparison.runs}">
-                            <td>
-                                <c:out value="${run.result != null ? run.result.aggregateMetrics.averageResponseTime : 'N/A'}"/>
+                            <td class="${(comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minResponseRunId) ? 'highlight-winner' : ''}">
+                                <div><c:out value="${run.result != null ? run.result.aggregateMetrics.averageResponseTime : 'N/A'}"/>
+                                <c:if test="${comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minResponseRunId}"><span class="tag-winner">LOWEST</span></c:if></div>
+                                <div><span class="delta-pill">Δ ${comparison.getResponseDelta(run)}</span></div>
+                            </td>
+                        </c:forEach>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Simulated Throughput</td>
+                        <c:forEach var="run" items="${comparison.runs}">
+                            <td class="${(comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.maxThroughputRunId) ? 'highlight-winner' : ''}">
+                                <div><c:out value="${run.result != null ? run.result.aggregateMetrics.throughput : 'N/A'}"/>
+                                <c:if test="${comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.maxThroughputRunId}"><span class="tag-winner">HIGHEST</span></c:if></div>
+                                <div><span class="delta-pill">Δ ${comparison.getThroughputDelta(run)}</span></div>
                             </td>
                         </c:forEach>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Context Switch Count</td>
                         <c:forEach var="run" items="${comparison.runs}">
-                            <td>
-                                <c:out value="${run.result != null ? run.result.aggregateMetrics.contextSwitchCount : 'N/A'}"/>
+                            <td class="${(comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minContextSwitchRunId) ? 'highlight-winner' : ''}">
+                                <div><c:out value="${run.result != null ? run.result.aggregateMetrics.contextSwitchCount : 'N/A'}"/>
+                                <c:if test="${comparison.mode == 'MODE_A_CONTROLLED' && run.id == comparison.minContextSwitchRunId}"><span class="tag-winner">LOWEST</span></c:if></div>
                             </td>
                         </c:forEach>
                     </tr>
@@ -172,14 +221,6 @@
                         <c:forEach var="run" items="${comparison.runs}">
                             <td>
                                 <c:out value="${run.result != null ? run.result.aggregateMetrics.totalDuration : 'N/A'}"/>
-                            </td>
-                        </c:forEach>
-                    </tr>
-                    <tr>
-                        <td style="font-weight: 600;">Simulated Throughput</td>
-                        <c:forEach var="run" items="${comparison.runs}">
-                            <td>
-                                <c:out value="${run.result != null ? run.result.aggregateMetrics.throughput : 'N/A'}"/>
                             </td>
                         </c:forEach>
                     </tr>

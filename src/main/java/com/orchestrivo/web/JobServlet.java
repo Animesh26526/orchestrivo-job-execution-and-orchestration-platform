@@ -1,10 +1,13 @@
 package com.orchestrivo.web;
 
 import com.google.gson.Gson;
+import com.orchestrivo.model.AlgorithmConfigSpec;
+import com.orchestrivo.model.BatchJobResult;
 import com.orchestrivo.model.ExecutionJobRecord;
 import com.orchestrivo.model.PagedResult;
 import com.orchestrivo.model.QueueMetrics;
 import com.orchestrivo.model.User;
+import com.orchestrivo.model.WorkloadRecord;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -12,11 +15,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@WebServlet({"/jobs", "/jobs/view", "/jobs/status", "/jobs/retry", "/jobs/cancel"})
+@WebServlet({"/jobs", "/jobs/view", "/jobs/status", "/jobs/retry", "/jobs/cancel", "/jobs/batch"})
 public class JobServlet extends HttpServlet {
 
     @Override
@@ -28,6 +33,8 @@ public class JobServlet extends HttpServlet {
             handleViewGet(req, resp, user);
         } else if ("/jobs/status".equals(path)) {
             handleStatusJsonGet(req, resp);
+        } else if ("/jobs/batch".equals(path)) {
+            handleBatchGet(req, resp, user);
         } else {
             handleListGet(req, resp, user);
         }
@@ -98,6 +105,9 @@ public class JobServlet extends HttpServlet {
             json.put("maxAttempts", job.getMaxAttempts());
             json.put("experimentRunId", job.getExperimentRunId());
             json.put("executionDurationMs", job.getExecutionDurationMs());
+            json.put("executionDurationNanos", job.getExecutionDurationNanos());
+            json.put("formattedDuration", job.getFormattedDuration());
+            json.put("batchId", job.getBatchId());
             json.put("queueWaitMs", job.getQueueWaitMs());
             json.put("errorMessage", job.getUserFacingErrorMessage());
 
@@ -117,6 +127,94 @@ public class JobServlet extends HttpServlet {
             handleRetryPost(req, resp, user);
         } else if ("/jobs/cancel".equals(path)) {
             handleCancelPost(req, resp, user);
+        } else if ("/jobs/batch".equals(path)) {
+            handleBatchPost(req, resp, user);
+        }
+    }
+
+    private void handleBatchGet(HttpServletRequest req, HttpServletResponse resp, User user) throws ServletException, IOException {
+        String batchId = req.getParameter("batchId");
+        if (batchId != null && !batchId.trim().isEmpty()) {
+            List<ExecutionJobRecord> batchJobs = ServiceRegistry.executionJobService.getJobsByBatchId(batchId.trim(), user.getId());
+            req.setAttribute("batchJobs", batchJobs);
+            req.setAttribute("batchId", batchId.trim());
+        }
+
+        String workloadIdParam = req.getParameter("workloadId");
+        if (workloadIdParam != null && !workloadIdParam.trim().isEmpty()) {
+            try {
+                long wid = Long.parseLong(workloadIdParam.trim());
+                Optional<WorkloadRecord> wr = ServiceRegistry.workloadService.getWorkloadById(wid, user.getId());
+                wr.ifPresent(w -> req.setAttribute("selectedWorkload", w));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        List<WorkloadRecord> userWorkloads = ServiceRegistry.workloadService.getWorkloadsByUser(user.getId());
+        req.setAttribute("workloads", userWorkloads);
+        req.getRequestDispatcher("/WEB-INF/views/jobs/batch.jsp").forward(req, resp);
+    }
+
+    private void handleBatchPost(HttpServletRequest req, HttpServletResponse resp, User user) throws ServletException, IOException {
+        String workloadIdStr = req.getParameter("workloadId");
+        if (workloadIdStr == null || workloadIdStr.trim().isEmpty()) {
+            req.setAttribute("error", "Please select a valid workload.");
+            handleBatchGet(req, resp, user);
+            return;
+        }
+
+        long workloadId;
+        try {
+            workloadId = Long.parseLong(workloadIdStr.trim());
+        } catch (NumberFormatException e) {
+            req.setAttribute("error", "Invalid workload ID.");
+            handleBatchGet(req, resp, user);
+            return;
+        }
+
+        Optional<WorkloadRecord> wrOpt = ServiceRegistry.workloadService.getWorkloadById(workloadId, user.getId());
+        if (wrOpt.isEmpty()) {
+            req.setAttribute("error", "Workload not found or access denied.");
+            handleBatchGet(req, resp, user);
+            return;
+        }
+
+        String[] selectedAlgorithms = req.getParameterValues("algorithms");
+        if (selectedAlgorithms == null || selectedAlgorithms.length == 0) {
+            req.setAttribute("error", "Please select at least one algorithm to execute.");
+            req.setAttribute("selectedWorkloadId", workloadId);
+            handleBatchGet(req, resp, user);
+            return;
+        }
+
+        int quantum = 3;
+        try {
+            String qStr = req.getParameter("quantum");
+            if (qStr != null && !qStr.trim().isEmpty()) {
+                quantum = Integer.parseInt(qStr.trim());
+            }
+        } catch (NumberFormatException ignored) {}
+
+        List<AlgorithmConfigSpec> configs = new ArrayList<>();
+        for (String algo : selectedAlgorithms) {
+            if ("ROUND_ROBIN".equalsIgnoreCase(algo)) {
+                configs.add(new AlgorithmConfigSpec("ROUND_ROBIN", quantum));
+            } else {
+                configs.add(new AlgorithmConfigSpec(algo));
+            }
+        }
+
+        try {
+            BatchJobResult batchResult = ServiceRegistry.executionJobService.enqueueBatch(wrOpt.get(), configs, user.getId());
+            if (ServiceRegistry.auditService != null) {
+                ServiceRegistry.auditService.log(user.getId(), "BATCH_ENQUEUED", "EXECUTION_JOB",
+                        batchResult.getBatchId(),
+                        Map.of("workloadId", workloadId, "count", batchResult.getJobCount()));
+            }
+            resp.sendRedirect(req.getContextPath() + "/jobs/batch?batchId=" + batchResult.getBatchId());
+        } catch (IllegalArgumentException | SecurityException e) {
+            req.setAttribute("error", e.getMessage());
+            req.setAttribute("selectedWorkloadId", workloadId);
+            handleBatchGet(req, resp, user);
         }
     }
 

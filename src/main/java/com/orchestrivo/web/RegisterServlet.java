@@ -16,11 +16,26 @@ public class RegisterServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String fullName = req.getParameter("fullName");
         String email = req.getParameter("email");
         String password = req.getParameter("password");
+        String confirmPassword = req.getParameter("confirmPassword");
         
+        if (confirmPassword != null && !confirmPassword.equals(password)) {
+            req.setAttribute("error", "Passwords do not match.");
+            req.setAttribute("fullName", fullName);
+            req.setAttribute("email", email);
+            req.getRequestDispatcher("/WEB-INF/views/auth/register.jsp").forward(req, resp);
+            return;
+        }
+
         try {
-            User user = ServiceRegistry.authService.register(email, password, "USER");
+            User user;
+            if (fullName != null && !fullName.trim().isEmpty()) {
+                user = ServiceRegistry.authService.register(email, password, fullName, "USER");
+            } else {
+                user = ServiceRegistry.authService.register(email, password, "USER");
+            }
             HttpSession session = req.getSession(true);
             req.changeSessionId();
             session.setAttribute("user", user);
@@ -31,6 +46,8 @@ public class RegisterServlet extends HttpServlet {
             resp.sendRedirect(req.getContextPath() + "/dashboard");
         } catch (IllegalArgumentException e) {
             req.setAttribute("error", e.getMessage());
+            req.setAttribute("fullName", fullName);
+            req.setAttribute("email", email);
             req.getRequestDispatcher("/WEB-INF/views/auth/register.jsp").forward(req, resp);
         }
     }

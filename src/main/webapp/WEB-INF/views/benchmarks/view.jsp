@@ -40,6 +40,7 @@
         </div>
         <div class="page-actions">
             <a href="<%= request.getContextPath() %>/benchmarks" class="btn btn-secondary">&larr; Back to Benchmarks</a>
+            <a href="<%= request.getContextPath() %>/benchmarks/compare?${benchmark.runType == 'CANDIDATE' ? 'candidateId' : 'baselineId'}=${benchmark.id}" class="btn btn-secondary">⇄ Compare Run</a>
             <a href="<%= request.getContextPath() %>/benchmarks/run" class="btn btn-primary">+ Run New Benchmark</a>
         </div>
     </div>
@@ -56,7 +57,18 @@
             <table class="data-table">
                 <tbody>
                     <tr>
-                        <td style="width: 240px; font-weight: 600;">Algorithm:</td>
+                        <td style="width: 240px; font-weight: 600;">Run Designation:</td>
+                        <td>
+                            <span class="badge ${benchmark.runType == 'BASELINE' ? 'badge-primary' : (benchmark.runType == 'CANDIDATE' ? 'badge-success' : 'badge-neutral')}">
+                                <c:out value="${benchmark.runType}"/>
+                            </span>
+                            <c:if test="${not empty benchmark.benchmarkGroup}">
+                                &bull; Group: <code><c:out value="${benchmark.benchmarkGroup}"/></code>
+                            </c:if>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 600;">Algorithm:</td>
                         <td><strong><c:out value="${benchmark.algorithmName}"/></strong></td>
                     </tr>
                     <tr>

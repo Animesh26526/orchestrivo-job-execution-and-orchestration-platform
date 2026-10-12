@@ -33,13 +33,29 @@
 
         <div class="form-group">
             <label class="form-label" for="passwordInput">Password</label>
-            <input type="password" id="passwordInput" name="password" class="form-input" placeholder="Enter your password" required>
+            <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="passwordInput" name="password" class="form-input" style="padding-right: 42px;" placeholder="Enter your password" required autocomplete="current-password">
+                <button type="button" class="btn btn-outline" style="position: absolute; right: 6px; padding: 3px 8px; font-size: 11px;" onclick="toggleLoginPassword(this)" aria-label="Toggle password visibility">Show</button>
+            </div>
         </div>
 
         <div style="margin-top: 24px;">
             <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px;">Sign In</button>
         </div>
     </form>
+
+    <script>
+    function toggleLoginPassword(btn) {
+        const inp = document.getElementById('passwordInput');
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            btn.textContent = 'Hide';
+        } else {
+            inp.type = 'password';
+            btn.textContent = 'Show';
+        }
+    }
+    </script>
 
     <div class="auth-footer">
         Don't have an account? <a href="<%= request.getContextPath() %>/register">Create Account</a>

@@ -54,15 +54,7 @@ public class ExperimentRunRecord {
     public void setResult(ScheduleResult result) { this.result = result; }
 
     public List<ProcessSpec> getSnapshotProcesses() {
-        if (inputSnapshot == null || inputSnapshot.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        try {
-            Type listType = new TypeToken<List<ProcessSpec>>(){}.getType();
-            return new Gson().fromJson(inputSnapshot, listType);
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
+        return WorkloadSnapshot.extractProcesses(inputSnapshot);
     }
 
     public String getFormattedParameters() {

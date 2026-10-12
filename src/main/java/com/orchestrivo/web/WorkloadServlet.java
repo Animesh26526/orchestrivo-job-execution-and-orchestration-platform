@@ -273,7 +273,13 @@ public class WorkloadServlet extends HttpServlet {
             int maxArrival = Integer.parseInt(req.getParameter("maxArrival"));
             int minBurst = Integer.parseInt(req.getParameter("minBurst"));
             int maxBurst = Integer.parseInt(req.getParameter("maxBurst"));
-            long seed = Long.parseLong(req.getParameter("seed"));
+            String seedParam = req.getParameter("seed");
+            long seed;
+            if (seedParam == null || seedParam.trim().isEmpty()) {
+                seed = WorkloadGenerator.generateSecureSeed();
+            } else {
+                seed = Long.parseLong(seedParam.trim());
+            }
 
             WorkloadGenerator.GeneratorConfig config = new WorkloadGenerator.GeneratorConfig(
                     name, processCount, minArrival, maxArrival, minBurst, maxBurst, seed

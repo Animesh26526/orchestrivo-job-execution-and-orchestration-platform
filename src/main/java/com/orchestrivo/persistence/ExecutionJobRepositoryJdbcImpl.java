@@ -44,6 +44,20 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                     } catch (SQLException ignored) {}
                 }
             }
+            boolean hasBatchId = false;
+            try (ResultSet rs = meta.getColumns(null, null, "execution_jobs", "batch_id")) {
+                if (rs.next()) {
+                    hasBatchId = true;
+                }
+            }
+            if (!hasBatchId) {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.executeUpdate("ALTER TABLE execution_jobs ADD COLUMN execution_duration_nanos BIGINT NULL AFTER execution_duration_ms, ADD COLUMN batch_id VARCHAR(64) NULL AFTER idempotency_key");
+                    try {
+                        stmt.executeUpdate("CREATE INDEX idx_jobs_batch ON execution_jobs(batch_id)");
+                    } catch (SQLException ignored) {}
+                } catch (SQLException ignored) {}
+            }
         } catch (Exception ignored) {
             // DataSource may not yet be initialized or table might not exist in isolated test contexts
         }
@@ -53,8 +67,8 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
     public ExecutionJobRecord save(ExecutionJobRecord job) {
         String sql = "INSERT INTO execution_jobs " +
                 "(owner_user_id, workload_id, algorithm_name, algorithm_parameters, input_snapshot, " +
-                "status, attempt_count, max_attempts, claimed_by, idempotency_key) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "status, attempt_count, max_attempts, claimed_by, idempotency_key, batch_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -69,6 +83,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
             ps.setInt(8, job.getMaxAttempts() > 0 ? job.getMaxAttempts() : 3);
             ps.setString(9, job.getClaimedBy());
             ps.setString(10, job.getIdempotencyKey());
+            ps.setString(11, job.getBatchId());
 
             ps.executeUpdate();
 
@@ -380,6 +395,11 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
 
     @Override
     public boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs) {
+        return completeJobWithExperimentRun(jobId, claimToken, runRecord, durationMs, durationMs * 1_000_000L);
+    }
+
+    @Override
+    public boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs, long durationNanos) {
         String checkAndLockSql = "SELECT status, claim_token FROM execution_jobs WHERE id = ? FOR UPDATE";
         String insertRunSql = "INSERT INTO experiment_runs " +
                 "(owner_user_id, workload_id, algorithm_name, algorithm_parameters, input_snapshot, run_status, " +
@@ -387,7 +407,7 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
                 "average_response_time, simulated_throughput, context_switches, cpu_idle_time, total_duration, error_message) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String updateJobSql = "UPDATE execution_jobs " +
-                "SET status = 'COMPLETED', experiment_run_id = ?, execution_duration_ms = ?, " +
+                "SET status = 'COMPLETED', experiment_run_id = ?, execution_duration_ms = ?, execution_duration_nanos = ?, " +
                 "completed_at = NOW(), claimed_by = NULL, claim_token = NULL, lease_expires_at = NULL " +
                 "WHERE id = ? AND status = 'RUNNING' AND (? IS NULL OR claim_token = ? OR claim_token IS NULL)";
 
@@ -503,13 +523,14 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
             try (PreparedStatement psUpdate = conn.prepareStatement(updateJobSql)) {
                 psUpdate.setLong(1, runId);
                 psUpdate.setLong(2, durationMs);
-                psUpdate.setLong(3, jobId);
+                psUpdate.setLong(3, durationNanos);
+                psUpdate.setLong(4, jobId);
                 if (claimToken != null) {
-                    psUpdate.setString(4, claimToken);
                     psUpdate.setString(5, claimToken);
+                    psUpdate.setString(6, claimToken);
                 } else {
-                    psUpdate.setNull(4, Types.VARCHAR);
                     psUpdate.setNull(5, Types.VARCHAR);
+                    psUpdate.setNull(6, Types.VARCHAR);
                 }
                 int updated = psUpdate.executeUpdate();
                 if (updated == 1) {
@@ -732,9 +753,43 @@ public class ExecutionJobRepositoryJdbcImpl implements ExecutionJobRepository {
         job.setIdempotencyKey(rs.getString("idempotency_key"));
 
         try {
+            long durNanos = rs.getLong("execution_duration_nanos");
+            if (!rs.wasNull()) job.setExecutionDurationNanos(durNanos);
+        } catch (SQLException ignored) {}
+
+        try {
+            job.setBatchId(rs.getString("batch_id"));
+        } catch (SQLException ignored) {}
+
+        try {
             job.setWorkloadName(rs.getString("workload_name"));
         } catch (SQLException ignored) {}
 
         return job;
+    }
+
+    @Override
+    public List<ExecutionJobRecord> findByBatchId(String batchId, long userId) {
+        String sql = "SELECT j.*, w.name AS workload_name " +
+                "FROM execution_jobs j " +
+                "LEFT JOIN workloads w ON j.workload_id = w.id " +
+                "WHERE j.batch_id = ? AND j.owner_user_id = ? " +
+                "ORDER BY j.id ASC";
+
+        List<ExecutionJobRecord> list = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, batchId);
+            ps.setLong(2, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRow(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error querying jobs for batch: " + batchId, e);
+        }
+        return list;
     }
 }

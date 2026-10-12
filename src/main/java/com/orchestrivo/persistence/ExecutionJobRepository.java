@@ -34,7 +34,11 @@ public interface ExecutionJobRepository {
 
     boolean markFailed(long jobId, String claimToken, String errorMessage, boolean canRetry);
 
+    List<ExecutionJobRecord> findByBatchId(String batchId, long userId);
+
     boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs);
+
+    boolean completeJobWithExperimentRun(long jobId, String claimToken, com.orchestrivo.model.ExperimentRunRecord runRecord, long durationMs, long durationNanos);
 
     boolean cancelJob(long jobId, long userId);
 

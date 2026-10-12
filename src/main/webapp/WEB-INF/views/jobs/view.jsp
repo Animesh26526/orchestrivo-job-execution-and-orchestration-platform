@@ -91,15 +91,17 @@
         <div class="metric-card">
             <div class="metric-header">
                 <span class="metric-label">Engine Computation</span>
-                <span class="badge badge-neutral">Execution</span>
+                <span class="badge badge-neutral">Physical Execution</span>
             </div>
             <div class="metric-value">
                 <c:choose>
-                    <c:when test="${job.executionDurationMs != null}">${job.executionDurationMs} ms</c:when>
+                    <c:when test="${job.executionDurationNanos != null or job.executionDurationMs != null}">
+                        <c:out value="${job.formattedDuration}"/>
+                    </c:when>
                     <c:otherwise><span style="color:#94a3b8;">Pending</span></c:otherwise>
                 </c:choose>
             </div>
-            <div class="metric-subtext">Wall-clock algorithm runtime</div>
+            <div class="metric-subtext">Physical worker runtime (vs domain clock ticks)</div>
         </div>
     </div>
 
@@ -158,6 +160,16 @@
                         <td style="font-weight: 600;">Claimed Worker:</td>
                         <td><code><c:out value="${job.claimedBy}" default="None"/></code></td>
                     </tr>
+                    <c:if test="${not empty job.batchId}">
+                        <tr>
+                            <td style="font-weight: 600;">Batch Group:</td>
+                            <td>
+                                <a href="<%= request.getContextPath() %>/jobs/batch?batchId=${job.batchId}" class="badge badge-neutral" style="text-decoration:none;">
+                                    &boxplus; <c:out value="${job.batchId}"/>
+                                </a>
+                            </td>
+                        </tr>
+                    </c:if>
                     <c:if test="${not empty job.idempotencyKey}">
                         <tr>
                             <td style="font-weight: 600;">Idempotency Key:</td>
